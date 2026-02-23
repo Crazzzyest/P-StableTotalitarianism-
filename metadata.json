@@ -1,0 +1,5 @@
+{
+  "name": "AI Probability Model",
+  "description": "Interactive visualization comparing P(Doom) and P(Stable Totalitarianism) based on conditional probability chains.",
+  "requestFramePermissions": []
+}
