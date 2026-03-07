@@ -177,7 +177,7 @@ const defaultDoomText = {
   chainSubtitle: 'Extinction scenarios require a long chain of conditional failures. Each link multiplies the uncertainty.',
   nodes: [
     { title: '1. ASI is Possible', description: 'Artificial Superintelligence can be built and is technically feasible.' },
-    { title: '2. Misaligned by Default', description: 'ASI is misaligned by default AND all alignment techniques fail.' },
+    { title: '2. ASI misaligned', description: 'ASI is misaligned by default AND all alignment techniques fail.' },
     { title: '3. Failure to Contain', description: "We don't catch it and shut it down before irreversible catastrophe." },
     { title: '4. Extinction Capability', description: 'The AI is actually capable of causing human extinction.' },
   ],
@@ -194,8 +194,8 @@ const defaultTText = {
 };
 
 const initialDoomNodes: ChainNodeState[] = [
-  { combineMode: 'all', subLinks: [{ id: 'd1', label: '', value: 0.8 }] },
-  { combineMode: 'all', subLinks: [{ id: 'd2', label: '', value: 0.4 }] },
+  { combineMode: 'all', subLinks: [{ id: 'd1a', label: 'No pause', value: 0.9 }, { id: 'd1b', label: 'technically feasible', value: 0.9 }] },
+  { combineMode: 'all', subLinks: [{ id: 'd2a', label: 'RLHF insufficient', value: 0.5 }, { id: 'd2b', label: 'alignment techniques fail', value: 0.8 }] },
   { combineMode: 'all', subLinks: [{ id: 'd3', label: '', value: 0.3 }] },
   { combineMode: 'all', subLinks: [{ id: 'd4', label: '', value: 0.5 }] },
 ];
@@ -225,25 +225,25 @@ export default function App() {
         <button
           type="button"
           onClick={() => setActiveTab('model')}
-          className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 ${
+          className={`flex items-center gap-4 px-8 py-5 text-xl font-medium transition-colors border-b-2 ${
             activeTab === 'model'
               ? 'border-indigo-500 text-zinc-100'
               : 'border-transparent text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <Activity size={16} />
+          <Activity size={48} />
           P(Doom) vs P(T)
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('graph')}
-          className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 ${
+          className={`flex items-center gap-4 px-8 py-5 text-xl font-medium transition-colors border-b-2 ${
             activeTab === 'graph'
               ? 'border-indigo-500 text-zinc-100'
               : 'border-transparent text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <LayoutGrid size={16} />
+          <LayoutGrid size={48} />
           AI Power Graph
         </button>
       </div>
@@ -344,6 +344,15 @@ export default function App() {
                 rows={2}
                 className="text-sm text-zinc-500 mt-2 w-full bg-transparent border border-transparent hover:border-zinc-600/50 rounded px-2 py-1 resize-y focus:border-zinc-500 focus:outline-none"
               />
+            </div>
+
+            <div className="mb-6 p-4 bg-zinc-900/60 border border-zinc-700/50 rounded-xl space-y-4">
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                <strong className="text-zinc-300">Unfaithful Discretisation:</strong> So, this model assumes a lot of non-binary things are binary. Like RLHF might not be sufficient to align ASIs, but might succeed to varying degrees, and this might influence how easy control-type schemes are to work. This model doesn&apos;t account for this.
+              </p>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                <strong className="text-zinc-300">Doom After 10 Years:</strong> This model computes the probability we&apos;ll be killed by AI in the next 10 years (given my estimates for various probabilities). If AI isn&apos;t developed in the next 10 years, we might be just as screwed then as we are now, so the final doom number is substantially lower than the total p(doom) of AI.
+              </p>
             </div>
 
             <ChainNode
