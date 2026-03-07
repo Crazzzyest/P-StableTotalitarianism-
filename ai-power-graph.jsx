@@ -113,21 +113,26 @@ const CATEGORY_META = {
   terminal: { color: "#cc1122", label: "Terminal State" },
 };
 
+const GRAPH_WIDTH = 800;
+const GRAPH_HEIGHT = 600;
+
 export default function AiPowerGraph() {
   const containerRef = useRef(null);
   const [positions, setPositions] = useState({});
   const [selected, setSelected] = useState(null);
   const [hovered, setHovered] = useState(null);
-  const [dims, setDims] = useState({ w: 800, h: 620 });
+  const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
+  const [positionsLocked, setPositionsLocked] = useState(false);
   const simRef = useRef(null);
   const nodesRef = useRef(null);
   const linksRef = useRef(null);
+  const savedPositionsRef = useRef({});
 
   useEffect(() => {
     const update = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setDims({ w: rect.width || 800, h: Math.max(rect.height, 500) });
+        setContainerSize({ w: rect.width || GRAPH_WIDTH, h: Math.max(rect.height, 400) });
       }
     };
     update();
@@ -137,14 +142,18 @@ export default function AiPowerGraph() {
   }, []);
 
   useEffect(() => {
-    const { w, h } = dims;
-    if (w < 100) return;
+    const w = GRAPH_WIDTH;
+    const h = GRAPH_HEIGHT;
+    const saved = savedPositionsRef.current;
 
-    const nodeData = NODES.map(n => ({
-      ...n,
-      x: n.x !== undefined ? n.x : w / 2 + (Math.random() - 0.5) * 200,
-      y: n.y !== undefined ? n.y : h / 2 + (Math.random() - 0.5) * 200,
-    }));
+    const nodeData = NODES.map(n => {
+      const savedPos = saved[n.id];
+      return {
+        ...n,
+        x: savedPos ? savedPos.x : (n.x !== undefined ? n.x : w / 2 + (Math.random() - 0.5) * 200),
+        y: savedPos ? savedPos.y : (n.y !== undefined ? n.y : h / 2 + (Math.random() - 0.5) * 200),
+      };
+    });
     const linkData = LINKS.map(l => ({ ...l }));
 
     nodesRef.current = nodeData;
@@ -163,9 +172,17 @@ export default function AiPowerGraph() {
         setPositions({ ...pos });
       });
 
+    if (positionsLocked) {
+      nodeData.forEach(n => { n.fx = n.x; n.fy = n.y; });
+      sim.stop();
+      const pos = {};
+      nodeData.forEach(n => { pos[n.id] = { x: n.x, y: n.y }; });
+      setPositions(pos);
+    }
+
     simRef.current = sim;
     return () => sim.stop();
-  }, [dims]);
+  }, [containerSize, positionsLocked]);
 
   const onDrag = useCallback((id, mx, my) => {
     const n = nodesRef.current?.find(x => x.id === id);
@@ -181,6 +198,24 @@ export default function AiPowerGraph() {
     if (n) { n.fx = null; n.fy = null; }
   }, []);
 
+  const onLockPositions = useCallback(() => {
+    const nodes = nodesRef.current;
+    if (!nodes) return;
+    const next = {};
+    nodes.forEach(n => { next[n.id] = { x: n.x, y: n.y }; });
+    savedPositionsRef.current = next;
+    nodes.forEach(n => { n.fx = n.x; n.fy = n.y; });
+    if (simRef.current) simRef.current.stop();
+    setPositionsLocked(true);
+  }, []);
+
+  const onUnlockPositions = useCallback(() => {
+    const nodes = nodesRef.current;
+    if (nodes) nodes.forEach(n => { n.fx = null; n.fy = null; });
+    if (simRef.current) simRef.current.alpha(0.3).restart();
+    setPositionsLocked(false);
+  }, []);
+
   const highlighted = useMemo(() => {
     const activeId = selected?.id || hovered;
     if (!activeId) return null;
@@ -190,16 +225,19 @@ export default function AiPowerGraph() {
     return { nodeIds, linkKeys };
   }, [selected, hovered]);
 
-  const { w, h } = dims;
-
   return (
-    <div style={{ background: "#06090c", minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "'IBM Plex Mono', monospace", color: "#7a90a8" }}>
+    <div style={{ background: "#06090c", minHeight: "100%", display: "flex", flexDirection: "column", fontFamily: "'IBM Plex Mono', monospace", color: "#7a90a8" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,700;1,400&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: #0a0f14; } ::-webkit-scrollbar-thumb { background: #1a2a3a; }
         .node-g { cursor: pointer; }
         .node-g:hover circle.main { filter: brightness(1.6); }
+        @media (max-width: 768px) {
+          .graph-layout { flex-direction: column !important; }
+          .graph-canvas { min-height: 65vh !important; width: 100% !important; }
+          .graph-panel { width: 100% !important; max-height: 35vh !important; border-left: none !important; border-top: 1px solid #0d1822 !important; }
+        }
       `}</style>
 
       {/* Header */}
@@ -213,10 +251,16 @@ export default function AiPowerGraph() {
         </h1>
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
-        {/* Graph canvas */}
-        <div ref={containerRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-          <svg width={w} height={h} style={{ display: "block" }}>
+      <div className="graph-layout" style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
+        {/* Graph canvas - scales to fit */}
+        <div ref={containerRef} className="graph-canvas" style={{ flex: 1, position: "relative", overflow: "hidden", minHeight: 280 }}>
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ display: "block" }}
+          >
             <defs>
               {["pos", "neg", "pos-dim", "neg-dim"].map(k => {
                 const col = k === "pos" ? "#00cc66" : k === "neg" ? "#cc2233" : k === "pos-dim" ? "#0d2a18" : "#2a0d10";
@@ -239,14 +283,14 @@ export default function AiPowerGraph() {
                 <stop offset="100%" stopColor="#06090c" />
               </radialGradient>
             </defs>
-            <rect width={w} height={h} fill="url(#bg-grad)" />
+            <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#bg-grad)" />
 
             {/* Grid lines */}
-            {Array.from({ length: Math.ceil(w / 60) }).map((_, i) => (
-              <line key={`gv${i}`} x1={i * 60} y1={0} x2={i * 60} y2={h} stroke="#0d1520" strokeWidth="0.5" />
+            {Array.from({ length: Math.ceil(GRAPH_WIDTH / 60) }).map((_, i) => (
+              <line key={`gv${i}`} x1={i * 60} y1={0} x2={i * 60} y2={GRAPH_HEIGHT} stroke="#0d1520" strokeWidth="0.5" />
             ))}
-            {Array.from({ length: Math.ceil(h / 60) }).map((_, i) => (
-              <line key={`gh${i}`} x1={0} y1={i * 60} x2={w} y2={i * 60} stroke="#0d1520" strokeWidth="0.5" />
+            {Array.from({ length: Math.ceil(GRAPH_HEIGHT / 60) }).map((_, i) => (
+              <line key={`gh${i}`} x1={0} y1={i * 60} x2={GRAPH_WIDTH} y2={i * 60} stroke="#0d1520" strokeWidth="0.5" />
             ))}
 
             {/* Links */}
@@ -298,6 +342,7 @@ export default function AiPowerGraph() {
                 <NodeGroup key={node.id} id={node.id} x={pos.x} y={pos.y} r={r}
                   color={meta.color} isSel={isSel} isHov={isHov} isDim={isDim}
                   words={words} category={node.category}
+                  positionsLocked={positionsLocked}
                   onSelect={() => setSelected(isSel ? null : node)}
                   onHover={() => setHovered(node.id)} onHoverEnd={() => setHovered(null)}
                   onDrag={onDrag} onDragEnd={onDragEnd}
@@ -306,16 +351,37 @@ export default function AiPowerGraph() {
             })}
           </svg>
 
-          {/* Floating hint */}
-          {!selected && !hovered && (
-            <div style={{ position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", letterSpacing: "3px", color: "#1e3040", pointerEvents: "none" }}>
-              CLICK NODE TO INSPECT · DRAG TO REPOSITION
+          {/* Lock + hint */}
+          <div style={{ position: "absolute", bottom: "12px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", pointerEvents: "none" }}>
+            <div style={{ pointerEvents: "auto" }}>
+              <button
+                type="button"
+                onClick={positionsLocked ? onUnlockPositions : onLockPositions}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: "11px",
+                  letterSpacing: "1px",
+                  color: positionsLocked ? "#7a90a8" : "#2a4060",
+                  background: positionsLocked ? "#0d1822" : "#1a2a3a",
+                  border: "1px solid #0d1822",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontFamily: "'IBM Plex Mono', monospace",
+                }}
+              >
+                {positionsLocked ? "🔓 Unlock positions" : "🔒 Lock positions"}
+              </button>
             </div>
-          )}
+            {!selected && !hovered && (
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#1e3040" }}>
+                CLICK NODE TO INSPECT · DRAG TO REPOSITION
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right panel */}
-        <div style={{ width: "280px", flexShrink: 0, borderLeft: "1px solid #0d1822", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Right panel - below graph on mobile so it doesn't hide the graph */}
+        <div className="graph-panel" style={{ width: "280px", flexShrink: 0, borderLeft: "1px solid #0d1822", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <Legend />
           <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
             {selected
@@ -329,7 +395,7 @@ export default function AiPowerGraph() {
   );
 }
 
-function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, onSelect, onHover, onHoverEnd, onDrag, onDragEnd }) {
+function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, positionsLocked, onSelect, onHover, onHoverEnd, onDrag, onDragEnd }) {
   const dragging = useRef(false);
   const startPos = useRef(null);
   const isTerminal = category === "terminal";
@@ -337,6 +403,7 @@ function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, o
 
   const onMouseDown = (e) => {
     e.stopPropagation();
+    if (positionsLocked) { onSelect(); return; }
     dragging.current = false;
     startPos.current = { x: e.clientX, y: e.clientY };
     const onMove = (ev) => {
