@@ -112,40 +112,83 @@ const CATEGORY_META = {
   terminal: { color: "#cc1122", label: "Terminal State" },
 };
 
-const GRAPH_WIDTH = 800;
-const GRAPH_HEIGHT = 600;
+// Layout from improved graph: 1000 viewBox, ring + center nodes, curved edges
+const VB = 1000;
+const CX = 500;
+const CY = 500;
+const RING_R = 355;
+const CENTER_GAP = 160;
 
-const cx = GRAPH_WIDTH / 2;
-const cy = GRAPH_HEIGHT / 2;
-const RING_RADIUS = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) * 0.38;
+const isCenter = (node) => node.category === "outcome" || node.category === "terminal";
 
-function getRingPositions() {
-  const n = NODES.length;
-  const positions = {};
-  for (let i = 0; i < n; i++) {
-    const angle = -Math.PI / 2 + (i / n) * 2 * Math.PI;
-    positions[NODES[i].id] = {
-      x: cx + RING_RADIUS * Math.cos(angle),
-      y: cy + RING_RADIUS * Math.sin(angle),
-    };
-  }
-  return positions;
+const BASE_R = { policy: 20, ai: 20, risk: 18, social: 18, state: 18, outcome: 30, terminal: 40 };
+const DOUBLED = new Set(["ai_capability", "mass_casualty", "emergency_powers", "power_concentration"]);
+const getR = (node) => (BASE_R[node.category] ?? 18) * (DOUBLED.has(node.id) ? 2 : 1);
+
+function computePositions(nodes) {
+  const ring = nodes.filter((n) => !isCenter(n));
+  const center = nodes.filter((n) => isCenter(n));
+  const pos = {};
+  ring.forEach((n, i) => {
+    const a = (i / ring.length) * Math.PI * 2 - Math.PI / 2;
+    pos[n.id] = { x: CX + RING_R * Math.cos(a), y: CY + RING_R * Math.sin(a), a };
+  });
+  const totalH = (center.length - 1) * CENTER_GAP;
+  center.forEach((n, i) => {
+    pos[n.id] = { x: CX, y: CY - totalH / 2 + i * CENTER_GAP, a: 0 };
+  });
+  return pos;
 }
 
-const RING_POSITIONS = getRingPositions();
+function edgePath(sid, tid, pos, nm) {
+  const sp = pos[sid];
+  const tp = pos[tid];
+  if (!sp || !tp) return "";
+  const sr = getR(nm[sid]);
+  const tr = getR(nm[tid]);
+  const mx = (sp.x + tp.x) / 2;
+  const my = (sp.y + tp.y) / 2;
+  const cpx = mx + (CX - mx) * 0.3;
+  const cpy = my + (CY - my) * 0.3;
+  const dx1 = cpx - sp.x;
+  const dy1 = cpy - sp.y;
+  const d1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
+  const x1 = sp.x + (dx1 / d1) * sr;
+  const y1 = sp.y + (dy1 / d1) * sr;
+  const dx2 = tp.x - cpx;
+  const dy2 = tp.y - cpy;
+  const d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+  const x2 = tp.x - (dx2 / d2) * (tr + 9);
+  const y2 = tp.y - (dy2 / d2) * (tr + 9);
+  return `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cpx.toFixed(1)} ${cpy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+}
+
+function edgeMid(sid, tid, pos) {
+  const sp = pos[sid];
+  const tp = pos[tid];
+  if (!sp || !tp) return { x: CX, y: CY };
+  const mx = (sp.x + tp.x) / 2;
+  const my = (sp.y + tp.y) / 2;
+  const cpx = mx + (CX - mx) * 0.3;
+  const cpy = my + (CY - my) * 0.3;
+  return { x: (sp.x + tp.x + cpx * 2) / 4, y: (sp.y + tp.y + cpy * 2) / 4 - 10 };
+}
+
+const NODE_MAP = Object.fromEntries(NODES.map((n) => [n.id, n]));
+const RING_POSITIONS = computePositions(NODES);
 
 export default function AiPowerGraph() {
   const containerRef = useRef(null);
   const [selected, setSelected] = useState(null);
   const [hovered, setHovered] = useState(null);
-  const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
+  const [containerSize, setContainerSize] = useState({ w: VB, h: VB });
   const positions = RING_POSITIONS;
 
   useEffect(() => {
     const update = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setContainerSize({ w: rect.width || GRAPH_WIDTH, h: Math.max(rect.height, 400) });
+        setContainerSize({ w: rect.width || VB, h: Math.max(rect.height, 400) });
       }
     };
     update();
@@ -195,7 +238,7 @@ export default function AiPowerGraph() {
           <svg
             width="100%"
             height="100%"
-            viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+            viewBox={`0 0 ${VB} ${VB}`}
             preserveAspectRatio="xMidYMid meet"
             style={{ display: "block" }}
           >
@@ -221,43 +264,29 @@ export default function AiPowerGraph() {
                 <stop offset="100%" stopColor="#06090c" />
               </radialGradient>
             </defs>
-            <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#bg-grad)" />
+            <rect width={VB} height={VB} fill="url(#bg-grad)" />
+            <circle cx={CX} cy={CY} r={RING_R} fill="none" stroke="#0d1820" strokeWidth="1" strokeDasharray="2,8" />
 
-            {/* Grid lines */}
-            {Array.from({ length: Math.ceil(GRAPH_WIDTH / 60) }).map((_, i) => (
-              <line key={`gv${i}`} x1={i * 60} y1={0} x2={i * 60} y2={GRAPH_HEIGHT} stroke="#0d1520" strokeWidth="0.5" />
-            ))}
-            {Array.from({ length: Math.ceil(GRAPH_HEIGHT / 60) }).map((_, i) => (
-              <line key={`gh${i}`} x1={0} y1={i * 60} x2={GRAPH_WIDTH} y2={i * 60} stroke="#0d1520" strokeWidth="0.5" />
-            ))}
-
-            {/* Links */}
+            {/* Links – curved paths toward center */}
             {LINKS.map(link => {
-              const s = positions[link.source];
-              const t = positions[link.target];
-              if (!s || !t) return null;
               const key = `${link.source}::${link.target}`;
               const isActive = highlighted?.linkKeys.has(key);
               const isDim = highlighted && !isActive;
               const pos = link.weight > 0;
-              const dx = t.x - s.x, dy = t.y - s.y;
-              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-              const r1 = 32, r2 = 34;
-              const x1 = s.x + dx / dist * r1, y1 = s.y + dy / dist * r1;
-              const x2 = t.x - dx / dist * r2, y2 = t.y - dy / dist * r2;
               const col = isDim ? (pos ? "#0a1e10" : "#1e0a0c") : pos ? "#00cc66" : "#cc2233";
-              const op = isDim ? 0.3 : isActive ? 1 : 0.35;
+              const op = isDim ? 0.28 : 1;
               const mId = isDim ? (pos ? "arr-pos-dim" : "arr-neg-dim") : (pos ? "arr-pos" : "arr-neg");
-              const sw = isActive ? 1.8 : 1;
+              const sw = isActive ? 1.8 : 0.9;
+              const d = edgePath(link.source, link.target, positions, NODE_MAP);
+              const mid = isActive ? edgeMid(link.source, link.target, positions) : null;
 
               return (
                 <g key={key} opacity={op}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} strokeWidth={sw}
+                  <path d={d} fill="none" stroke={col} strokeWidth={sw}
                     strokeDasharray={pos ? "none" : "5,3"} markerEnd={`url(#${mId})`} />
-                  {isActive && (
-                    <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 7}
-                      fill={pos ? "#00cc66" : "#cc2233"} fontSize="9" textAnchor="middle"
-                      fontFamily="'IBM Plex Mono'" letterSpacing="1">
+                  {isActive && mid && (
+                    <text x={mid.x} y={mid.y} textAnchor="middle" fontSize="8"
+                      fill={pos ? "#00cc66" : "#cc2233"} fontFamily="'IBM Plex Mono'" letterSpacing="1">
                       {link.label}
                     </text>
                   )}
@@ -265,7 +294,7 @@ export default function AiPowerGraph() {
               );
             })}
 
-            {/* Nodes */}
+            {/* Nodes – ring + center, radius from getR */}
             {NODES.map(node => {
               const pos = positions[node.id];
               if (!pos) return null;
@@ -273,7 +302,7 @@ export default function AiPowerGraph() {
               const isHov = hovered === node.id;
               const isDim = highlighted && !highlighted.nodeIds.has(node.id);
               const meta = CATEGORY_META[node.category];
-              const r = node.category === "terminal" ? 40 : node.category === "outcome" ? 36 : 30;
+              const r = getR(node);
               const words = node.label.split(" ");
 
               return (
