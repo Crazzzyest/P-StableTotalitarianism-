@@ -1,6 +1,6 @@
 # Graph Save API (backend)
 
-Minimal Express API for saving/loading graph connections. Used by the frontend’s “Save / Load” (no password, token-based).
+Minimal Express API: register/login (username + password, stored plainly) and save/load graph per user. Session token returned on login/register; use `Authorization: Bearer <token>` for save/load.
 
 ## Deploy to Sliplane
 

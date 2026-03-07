@@ -206,8 +206,9 @@ export default function AiPowerGraph() {
   const [hovered, setHovered] = useState(null);
   const [addingLinkSource, setAddingLinkSource] = useState(null); // null | nodeId when waiting for target
   const [containerSize, setContainerSize] = useState({ w: VB, h: VB });
-  const [saveToken, setSaveToken] = useState(() => typeof localStorage !== "undefined" ? localStorage.getItem("graph_save_token") : null);
-  const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'saved' | 'error' | null
+  const [authToken, setAuthToken] = useState(() => typeof localStorage !== "undefined" ? localStorage.getItem("graph_auth_token") : null);
+  const [username, setUsername] = useState(() => typeof localStorage !== "undefined" ? localStorage.getItem("graph_username") : null);
+  const [saveStatus, setSaveStatus] = useState(null);
   const positions = RING_POSITIONS;
 
   useEffect(() => {
@@ -264,40 +265,75 @@ export default function AiPowerGraph() {
     setSelected(null);
   };
 
-  const apiBase = ""; // use relative /api so Vite proxy works in dev
-  const register = async () => {
+  const apiBase = "";
+  const authHeaders = () => (authToken ? { Authorization: `Bearer ${authToken}` } : {});
+
+  const register = async (u, p) => {
     try {
-      const res = await fetch(`${apiBase}/api/register`, { method: "POST" });
+      const res = await fetch(`${apiBase}/api/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: u, password: p }),
+      });
       const data = await res.json();
+      if (data.error) { setSaveStatus(data.error); return; }
       if (data.token) {
-        localStorage.setItem("graph_save_token", data.token);
-        setSaveToken(data.token);
-        setSaveStatus("Registered. Copy your key to load elsewhere.");
+        localStorage.setItem("graph_auth_token", data.token);
+        localStorage.setItem("graph_username", data.username);
+        setAuthToken(data.token);
+        setUsername(data.username);
+        setSaveStatus("Registered and logged in.");
       }
     } catch (e) {
       setSaveStatus("Error: " + (e.message || "Server unreachable"));
     }
   };
+  const login = async (u, p) => {
+    try {
+      const res = await fetch(`${apiBase}/api/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: u, password: p }),
+      });
+      const data = await res.json();
+      if (data.error) { setSaveStatus(data.error); return; }
+      if (data.token) {
+        localStorage.setItem("graph_auth_token", data.token);
+        localStorage.setItem("graph_username", data.username);
+        setAuthToken(data.token);
+        setUsername(data.username);
+        setSaveStatus("Logged in.");
+      }
+    } catch (e) {
+      setSaveStatus("Error: " + (e.message || "Server unreachable"));
+    }
+  };
+  const logout = () => {
+    localStorage.removeItem("graph_auth_token");
+    localStorage.removeItem("graph_username");
+    setAuthToken(null);
+    setUsername(null);
+    setSaveStatus(null);
+  };
   const saveGraph = async () => {
-    if (!saveToken) { setSaveStatus("Register first to get a key."); return; }
+    if (!authToken) { setSaveStatus("Log in first."); return; }
     setSaveStatus("saving");
     try {
       const res = await fetch(`${apiBase}/api/save`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: saveToken, links }),
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ links }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      setSaveStatus("saved");
+      if (!res.ok) { const t = await res.text(); throw new Error(t); }
+      setSaveStatus("Saved.");
     } catch (e) {
-      setSaveStatus("error: " + (e.message || "Save failed"));
+      setSaveStatus("Error: " + (e.message || "Save failed"));
     }
   };
-  const loadGraph = async (token) => {
-    const t = token || saveToken;
-    if (!t) return;
+  const loadGraph = async () => {
+    if (!authToken) { setSaveStatus("Log in first."); return; }
     try {
-      const res = await fetch(`${apiBase}/api/load?token=${encodeURIComponent(t)}`);
+      const res = await fetch(`${apiBase}/api/load`, { headers: authHeaders() });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       if (data.links && Array.isArray(data.links)) {
@@ -305,7 +341,7 @@ export default function AiPowerGraph() {
         setSaveStatus("Loaded.");
       }
     } catch (e) {
-      setSaveStatus("error: " + (e.message || "Load failed"));
+      setSaveStatus("Error: " + (e.message || "Load failed"));
     }
   };
 
@@ -450,10 +486,12 @@ export default function AiPowerGraph() {
                     onAddConnection={() => setAddingLinkSource(addingLinkSource === null ? "" : null)}
                     addingLinkSource={addingLinkSource}
                     onRegister={register}
+                    onLogin={login}
+                    onLogout={logout}
                     onSave={saveGraph}
                     onLoad={loadGraph}
-                    saveToken={saveToken}
-                    setSaveToken={setSaveToken}
+                    authToken={authToken}
+                    username={username}
                     saveStatus={saveStatus}
                   />
             }
@@ -628,8 +666,13 @@ function EdgeEdit({ link, nodeMap, onUpdate, onDelete, onClose }) {
   );
 }
 
-function EmptyState({ onAddConnection, addingLinkSource, onRegister, onSave, onLoad, saveToken, setSaveToken, saveStatus }) {
-  const [loadKeyInput, setLoadKeyInput] = useState("");
+function EmptyState({ onAddConnection, addingLinkSource, onRegister, onLogin, onLogout, onSave, onLoad, authToken, username, saveStatus }) {
+  const [regUser, setRegUser] = useState("");
+  const [regPass, setRegPass] = useState("");
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const inputStyle = { width: "100%", marginBottom: "6px", background: "#0a1420", border: "1px solid #1a2a3a", color: "#8a9aa8", fontSize: "11px", padding: "5px 8px", borderRadius: "2px", boxSizing: "border-box" };
+  const btn = (onClick, label, primary) => ({ padding: "5px 10px", fontSize: "9px", background: primary ? "#0d2a3a" : "transparent", border: `1px solid ${primary ? "#1a4a5a" : "#1a2a3a"}`, color: primary ? "#5ab4d4" : "#5a7080", borderRadius: "2px", cursor: "pointer" });
   return (
     <div style={{ color: "#1e3040", fontSize: "11px", lineHeight: "1.8" }}>
       <div style={{ marginBottom: "12px", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>CONNECTIONS</div>
@@ -637,23 +680,29 @@ function EmptyState({ onAddConnection, addingLinkSource, onRegister, onSave, onL
         {addingLinkSource !== null ? "Cancel add connection" : "Add connection"}
       </button>
 
-      <div style={{ marginBottom: "12px", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>SAVE / LOAD (no password)</div>
-      <p style={{ fontSize: "10px", color: "#3a5060", marginBottom: "8px" }}>Register to get a key. Save stores your connections. Use the same key elsewhere to load.</p>
-      {!saveToken ? (
-        <button type="button" onClick={onRegister} style={{ padding: "6px 12px", fontSize: "10px", background: "#0d2a3a", border: "1px solid #1a4a5a", color: "#5ab4d4", borderRadius: "2px", cursor: "pointer", marginBottom: "8px" }}>Register (get key)</button>
+      <div style={{ marginBottom: "10px", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>SAVE / LOAD</div>
+      {!authToken ? (
+        <>
+          <div style={{ fontSize: "9px", color: "#3a5060", marginBottom: "4px" }}>Register</div>
+          <input value={regUser} onChange={(e) => setRegUser(e.target.value)} placeholder="Username" style={inputStyle} />
+          <input type="password" value={regPass} onChange={(e) => setRegPass(e.target.value)} placeholder="Password" style={inputStyle} />
+          <button type="button" onClick={() => { if (regUser.trim() && regPass) onRegister(regUser.trim(), regPass); }} style={btn(null, "Register", true)}>Register</button>
+          <div style={{ fontSize: "9px", color: "#3a5060", marginTop: "12px", marginBottom: "4px" }}>Login</div>
+          <input value={loginUser} onChange={(e) => setLoginUser(e.target.value)} placeholder="Username" style={inputStyle} />
+          <input type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} placeholder="Password" style={inputStyle} />
+          <button type="button" onClick={() => { if (loginUser.trim() && loginPass) onLogin(loginUser.trim(), loginPass); }} style={btn(null, "Login", true)}>Login</button>
+        </>
       ) : (
         <>
-          <div style={{ fontSize: "9px", color: "#3a5060", marginBottom: "4px", wordBreak: "break-all" }}>Key: {saveToken}</div>
-          <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
-            <button type="button" onClick={onSave} style={{ padding: "5px 10px", fontSize: "9px", background: "#0d2a3a", border: "1px solid #1a4a5a", color: "#5ab4d4", borderRadius: "2px", cursor: "pointer" }}>Save</button>
-            <button type="button" onClick={() => onLoad()} style={{ padding: "5px 10px", fontSize: "9px", background: "transparent", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>Load</button>
+          <div style={{ fontSize: "10px", color: "#5a7080", marginBottom: "8px" }}>Logged in as <strong style={{ color: "#7a90a8" }}>{username}</strong></div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "6px" }}>
+            <button type="button" onClick={onSave} style={btn(null, "Save", true)}>Save</button>
+            <button type="button" onClick={onLoad} style={btn(null, "Load", false)}>Load</button>
+            <button type="button" onClick={onLogout} style={{ ...btn(null, "Logout", false), color: "#8a5566" }}>Logout</button>
           </div>
         </>
       )}
-      <div style={{ marginTop: "10px", fontSize: "9px", color: "#3a5060" }}>Or load with key:</div>
-      <input value={loadKeyInput} onChange={(e) => setLoadKeyInput(e.target.value)} placeholder="Paste key from another device" style={{ width: "100%", marginTop: "4px", marginBottom: "6px", background: "#0a1420", border: "1px solid #1a2a3a", color: "#5a7080", fontSize: "10px", padding: "5px 8px", borderRadius: "2px", boxSizing: "border-box" }} />
-      <button type="button" onClick={() => { const t = loadKeyInput.trim(); if (t) { setSaveToken(t); onLoad(t); } }} style={{ padding: "5px 10px", fontSize: "9px", background: "transparent", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>Load with this key</button>
-      {saveStatus && <div style={{ fontSize: "10px", color: saveStatus.startsWith("error") ? "#aa4444" : "#3a6060", marginTop: "4px" }}>{saveStatus}</div>}
+      {saveStatus && <div style={{ fontSize: "10px", color: saveStatus.toLowerCase().startsWith("error") ? "#aa4444" : "#3a6060", marginTop: "6px" }}>{saveStatus}</div>}
 
       <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #0d1822", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>ABOUT</div>
       <div style={{ color: "#2a4060", lineHeight: "1.9", marginTop: "6px" }}>
