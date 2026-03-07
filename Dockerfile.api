@@ -1,0 +1,19 @@
+# Backend API for graph save/load. Deploy to Sliplane (or any Docker host).
+# Build: docker build -f Dockerfile.api -t graph-api .
+# Run: docker run -p 3001:3001 -e PORT=3001 graph-api
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Only backend deps (express)
+COPY backend/package.json ./
+RUN npm install --omit=dev
+
+COPY server.js ./
+
+# Sliplane/Cloud Run set PORT; default for local
+ENV PORT=3001
+EXPOSE 3001
+
+CMD ["node", "server.js"]

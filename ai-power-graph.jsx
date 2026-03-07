@@ -76,6 +76,21 @@ const NODES = [
     description: "Near-total control over political, economic, and social life — potentially durable in a way no previous totalitarian system has been.",
     threat: "AI-enabled totalitarianism may be uniquely permanent: real-time surveillance, loyalty-optimized AI agents, preemptive suppression, and no historical analogue for resistance under these conditions.",
   },
+  {
+    id: "aging_cured", label: "Aging Cured", category: "ai",
+    description: "AI-enabled defeat of biological aging — existing power holders and coalition members no longer die of natural causes.",
+    threat: "The succession problem in totalitarian regimes stems from needing to recruit new coalition members as old ones die. Curing aging eliminates succession pressure entirely; the ruling coalition can remain permanently fixed.",
+  },
+  {
+    id: "regime_stability", label: "Regime Stability", category: "outcome",
+    description: "The succession question in totalitarian regimes is a problem stemming from adding new people to the ruling coalition as older members die. Technologies that remove succession pressure (e.g. longevity, perfect loyalty detection) directly enable regime stability.",
+    threat: "Without succession pressure, totalitarian structures can become indefinitely stable with no destabilizing turnover.",
+  },
+  {
+    id: "perfect_lie_detection", label: "Perfect Lie Detection", category: "ai",
+    description: "AI systems capable of identifying deception with near-certainty — applied to loyalty testing, interrogation, and political vetting.",
+    threat: "Eliminates the ability to form covert opposition or pretend loyalty while organizing resistance. The winning coalition can be shrunk to only verified loyalists.",
+  },
 ];
 
 const LINKS = [
@@ -100,6 +115,10 @@ const LINKS = [
   { source: "civil_liberties", target: "democratic_resilience", weight: 0.7, label: "sustains" },
   { source: "democratic_resilience", target: "power_concentration", weight: -0.8, label: "resists" },
   { source: "power_concentration", target: "totalitarianism", weight: 0.9, label: "becomes" },
+  { source: "ai_capability", target: "aging_cured", weight: 0.7, label: "enables" },
+  { source: "aging_cured", target: "regime_stability", weight: 0.85, label: "stabilizes" },
+  { source: "ai_capability", target: "perfect_lie_detection", weight: 0.65, label: "enables" },
+  { source: "perfect_lie_detection", target: "regime_stability", weight: 0.8, label: "strengthens" },
 ];
 
 const CATEGORY_META = {
@@ -177,11 +196,18 @@ function edgeMid(sid, tid, pos) {
 const NODE_MAP = Object.fromEntries(NODES.map((n) => [n.id, n]));
 const RING_POSITIONS = computePositions(NODES);
 
+const linkKey = (l) => `${l.source}::${l.target}`;
+const linkColor = (link) => link.color ?? (link.weight > 0 ? "#00cc66" : "#cc2233");
+
 export default function AiPowerGraph() {
   const containerRef = useRef(null);
-  const [selected, setSelected] = useState(null);
+  const [links, setLinks] = useState(() => LINKS.map((l) => ({ ...l })));
+  const [selected, setSelected] = useState(null); // { type: 'node', node } | { type: 'link', link } | null
   const [hovered, setHovered] = useState(null);
+  const [addingLinkSource, setAddingLinkSource] = useState(null); // null | nodeId when waiting for target
   const [containerSize, setContainerSize] = useState({ w: VB, h: VB });
+  const [saveToken, setSaveToken] = useState(() => typeof localStorage !== "undefined" ? localStorage.getItem("graph_save_token") : null);
+  const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'saved' | 'error' | null
   const positions = RING_POSITIONS;
 
   useEffect(() => {
@@ -197,14 +223,91 @@ export default function AiPowerGraph() {
     return () => ro.disconnect();
   }, []);
 
+  const activeNodeId = selected?.type === "node" ? selected.node?.id : hovered;
+  const selectedLink = selected?.type === "link" ? selected.link : null;
   const highlighted = useMemo(() => {
-    const activeId = selected?.id || hovered;
-    if (!activeId) return null;
-    const activeLinks = LINKS.filter(l => l.source === activeId || l.target === activeId);
-    const nodeIds = new Set([activeId, ...activeLinks.map(l => l.source), ...activeLinks.map(l => l.target)]);
-    const linkKeys = new Set(activeLinks.map(l => `${l.source}::${l.target}`));
+    const activeId = activeNodeId;
+    if (!activeId && !selectedLink) return null;
+    const activeLinks = links.filter((l) => l.source === activeId || l.target === activeId || selectedLink === l);
+    const nodeIds = new Set([
+      ...(activeId ? [activeId] : []),
+      ...(selectedLink ? [selectedLink.source, selectedLink.target] : []),
+      ...activeLinks.flatMap((l) => [l.source, l.target]),
+    ]);
+    const linkKeys = new Set(activeLinks.map((l) => linkKey(l)));
     return { nodeIds, linkKeys };
-  }, [selected, hovered]);
+  }, [activeNodeId, selectedLink, links]);
+
+  const handleNodeClick = (node) => {
+    if (addingLinkSource !== null) {
+      if (addingLinkSource === "") {
+        setAddingLinkSource(node.id);
+      } else if (addingLinkSource !== node.id) {
+        if (!links.some((l) => l.source === addingLinkSource && l.target === node.id)) {
+          setLinks((prev) => [...prev, { source: addingLinkSource, target: node.id, weight: 1, label: "enables" }]);
+        }
+        setAddingLinkSource(null);
+      }
+      return;
+    }
+    setSelected((s) => (s?.type === "node" && s.node?.id === node.id ? null : { type: "node", node }));
+  };
+
+  const updateLink = (source, target, updates) => {
+    setLinks((prev) => prev.map((l) => (l.source === source && l.target === target ? { ...l, ...updates } : l)));
+    if (selectedLink && selectedLink.source === source && selectedLink.target === target) {
+      setSelected({ type: "link", link: { ...selectedLink, ...updates } });
+    }
+  };
+  const deleteLink = (source, target) => {
+    setLinks((prev) => prev.filter((l) => !(l.source === source && l.target === target)));
+    setSelected(null);
+  };
+
+  const apiBase = ""; // use relative /api so Vite proxy works in dev
+  const register = async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/register`, { method: "POST" });
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("graph_save_token", data.token);
+        setSaveToken(data.token);
+        setSaveStatus("Registered. Copy your key to load elsewhere.");
+      }
+    } catch (e) {
+      setSaveStatus("Error: " + (e.message || "Server unreachable"));
+    }
+  };
+  const saveGraph = async () => {
+    if (!saveToken) { setSaveStatus("Register first to get a key."); return; }
+    setSaveStatus("saving");
+    try {
+      const res = await fetch(`${apiBase}/api/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: saveToken, links }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSaveStatus("saved");
+    } catch (e) {
+      setSaveStatus("error: " + (e.message || "Save failed"));
+    }
+  };
+  const loadGraph = async (token) => {
+    const t = token || saveToken;
+    if (!t) return;
+    try {
+      const res = await fetch(`${apiBase}/api/load?token=${encodeURIComponent(t)}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (data.links && Array.isArray(data.links)) {
+        setLinks(data.links);
+        setSaveStatus("Loaded.");
+      }
+    } catch (e) {
+      setSaveStatus("error: " + (e.message || "Load failed"));
+    }
+  };
 
   return (
     <div style={{ background: "#06090c", minHeight: "100%", display: "flex", flexDirection: "column", fontFamily: "'IBM Plex Mono', monospace", color: "#7a90a8" }}>
@@ -268,12 +371,12 @@ export default function AiPowerGraph() {
             <circle cx={CX} cy={CY} r={RING_R} fill="none" stroke="#0d1820" strokeWidth="1" strokeDasharray="2,8" />
 
             {/* Links – curved paths toward center */}
-            {LINKS.map(link => {
-              const key = `${link.source}::${link.target}`;
+            {links.map((link) => {
+              const key = linkKey(link);
               const isActive = highlighted?.linkKeys.has(key);
               const isDim = highlighted && !isActive;
               const pos = link.weight > 0;
-              const col = isDim ? (pos ? "#0a1e10" : "#1e0a0c") : pos ? "#00cc66" : "#cc2233";
+              const col = isDim ? (pos ? "#0a1e10" : "#1e0a0c") : linkColor(link);
               const op = isDim ? 0.28 : 1;
               const mId = isDim ? (pos ? "arr-pos-dim" : "arr-neg-dim") : (pos ? "arr-pos" : "arr-neg");
               const sw = isActive ? 1.8 : 0.9;
@@ -282,11 +385,24 @@ export default function AiPowerGraph() {
 
               return (
                 <g key={key} opacity={op}>
-                  <path d={d} fill="none" stroke={col} strokeWidth={sw}
-                    strokeDasharray={pos ? "none" : "5,3"} markerEnd={`url(#${mId})`} />
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={col}
+                    strokeWidth={sw}
+                    strokeDasharray={pos ? "none" : "5,3"}
+                    markerEnd={`url(#${mId})`}
+                  />
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth="16"
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => { e.stopPropagation(); setSelected((s) => (s?.type === "link" && linkKey(s.link) === key ? null : { type: "link", link })); }}
+                  />
                   {isActive && mid && (
-                    <text x={mid.x} y={mid.y} textAnchor="middle" fontSize="8"
-                      fill={pos ? "#00cc66" : "#cc2233"} fontFamily="'IBM Plex Mono'" letterSpacing="1">
+                    <text x={mid.x} y={mid.y} textAnchor="middle" fontSize="8" fill={linkColor(link)} fontFamily="'IBM Plex Mono'" letterSpacing="1">
                       {link.label}
                     </text>
                   )}
@@ -295,41 +411,51 @@ export default function AiPowerGraph() {
             })}
 
             {/* Nodes – ring + center, radius from getR */}
-            {NODES.map(node => {
+            {NODES.map((node) => {
               const pos = positions[node.id];
               if (!pos) return null;
-              const isSel = selected?.id === node.id;
+              const isSel = selected?.type === "node" && selected.node?.id === node.id;
               const isHov = hovered === node.id;
               const isDim = highlighted && !highlighted.nodeIds.has(node.id);
               const meta = CATEGORY_META[node.category];
               const r = getR(node);
               const words = node.label.split(" ");
 
+              const isAddSrc = addingLinkSource === node.id;
               return (
                 <NodeGroup key={node.id} id={node.id} x={pos.x} y={pos.y} r={r}
                   color={meta.color} isSel={isSel} isHov={isHov} isDim={isDim}
-                  words={words} category={node.category}
-                  onSelect={() => setSelected(isSel ? null : node)}
+                  words={words} category={node.category} isAddSource={isAddSrc}
+                  onSelect={() => handleNodeClick(node)}
                   onHover={() => setHovered(node.id)} onHoverEnd={() => setHovered(null)}
                 />
               );
             })}
           </svg>
 
-          {!selected && !hovered && (
-            <div style={{ position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", letterSpacing: "3px", color: "#1e3040", pointerEvents: "none" }}>
-              CLICK NODE TO INSPECT
-            </div>
-          )}
+          <div style={{ position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", letterSpacing: "3px", color: "#1e3040", pointerEvents: "none", textAlign: "center" }}>
+            {addingLinkSource ? (addingLinkSource === "" ? "Click source node" : "Click target node") : !selected && !hovered ? "CLICK NODE TO INSPECT · CLICK EDGE TO EDIT" : null}
+          </div>
         </div>
 
         {/* Right panel - below graph on mobile so it doesn't hide the graph */}
         <div className="graph-panel" style={{ width: "280px", flexShrink: 0, borderLeft: "1px solid #0d1822", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <Legend />
           <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
-            {selected
-              ? <NodeInfo node={selected} />
-              : <EmptyState />
+            {selected?.type === "link"
+              ? <EdgeEdit key={linkKey(selected.link)} link={selected.link} nodeMap={NODE_MAP} onUpdate={updateLink} onDelete={deleteLink} onClose={() => setSelected(null)} />
+              : selected?.type === "node"
+                ? <NodeInfo node={selected.node} links={links} />
+                : <EmptyState
+                    onAddConnection={() => setAddingLinkSource(addingLinkSource === null ? "" : null)}
+                    addingLinkSource={addingLinkSource}
+                    onRegister={register}
+                    onSave={saveGraph}
+                    onLoad={loadGraph}
+                    saveToken={saveToken}
+                    setSaveToken={setSaveToken}
+                    saveStatus={saveStatus}
+                  />
             }
           </div>
         </div>
@@ -338,7 +464,7 @@ export default function AiPowerGraph() {
   );
 }
 
-function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, onSelect, onHover, onHoverEnd }) {
+function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, isAddSource, onSelect, onHover, onHoverEnd }) {
   const isTerminal = category === "terminal";
   const isOutcome = category === "outcome" || isTerminal;
 
@@ -354,6 +480,7 @@ function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, o
     <g transform={`translate(${x},${y})`} opacity={op} className="node-g"
       onMouseDown={onMouseDown} onMouseEnter={onHover} onMouseLeave={onHoverEnd}
       filter={glowFilter}>
+      {isAddSource && <circle r={r + 10} fill="none" stroke="#5ab4d4" strokeWidth="2" strokeDasharray="4,3" />}
       {isTerminal && <circle r={r + 8} fill="none" stroke={color} strokeWidth="0.5" strokeOpacity="0.5" />}
       {isTerminal && <circle r={r + 14} fill="none" stroke={color} strokeWidth="0.3" strokeOpacity="0.25" />}
       {isOutcome && !isTerminal && <circle r={r + 6} fill="none" stroke={color} strokeWidth="0.5" strokeOpacity="0.3" />}
@@ -405,10 +532,10 @@ function Legend() {
   );
 }
 
-function NodeInfo({ node }) {
+function NodeInfo({ node, links }) {
   const meta = CATEGORY_META[node.category];
-  const incoming = LINKS.filter(l => l.target === node.id);
-  const outgoing = LINKS.filter(l => l.source === node.id);
+  const incoming = links.filter((l) => l.target === node.id);
+  const outgoing = links.filter((l) => l.source === node.id);
 
   return (
     <div>
@@ -465,21 +592,75 @@ function NodeInfo({ node }) {
   );
 }
 
-function EmptyState() {
+function EdgeEdit({ link, nodeMap, onUpdate, onDelete, onClose }) {
+  const [label, setLabel] = useState(link.label);
+  const [color, setColor] = useState(link.color ?? "");
+  const [weightPos, setWeightPos] = useState(link.weight > 0);
+  const src = nodeMap[link.source];
+  const tgt = nodeMap[link.target];
+  const save = () => {
+    onUpdate(link.source, link.target, { label, color: color || undefined, weight: weightPos ? 1 : -1 });
+  };
+  return (
+    <div>
+      <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#2a4060", marginBottom: "6px" }}>EDIT CONNECTION</div>
+      <div style={{ fontSize: "10px", color: "#5a7080", marginBottom: "10px" }}>
+        {src?.label} → {tgt?.label}
+      </div>
+      <label style={{ display: "block", fontSize: "9px", color: "#3a5060", marginBottom: "4px" }}>Label</label>
+      <input value={label} onChange={(e) => setLabel(e.target.value)} style={{ width: "100%", background: "#0a1420", border: "1px solid #1a2a3a", color: "#8a9aa8", fontSize: "11px", padding: "6px 8px", marginBottom: "10px", borderRadius: "2px" }} />
+      <label style={{ display: "block", fontSize: "9px", color: "#3a5060", marginBottom: "4px" }}>Color (optional)</label>
+      <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "10px" }}>
+        <input type="color" value={color || (weightPos ? "#00cc66" : "#cc2233")} onChange={(e) => setColor(e.target.value)} style={{ width: "28px", height: "24px", border: "1px solid #1a2a3a", background: "transparent", cursor: "pointer", padding: 0 }} />
+        <input value={color} onChange={(e) => setColor(e.target.value)} placeholder="hex or blank" style={{ flex: 1, background: "#0a1420", border: "1px solid #1a2a3a", color: "#5a7080", fontSize: "10px", padding: "5px 8px", borderRadius: "2px" }} />
+      </div>
+      <label style={{ display: "block", fontSize: "9px", color: "#3a5060", marginBottom: "4px" }}>Direction</label>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+        <button type="button" onClick={() => setWeightPos(true)} style={{ padding: "4px 10px", fontSize: "10px", background: weightPos ? "#0d2a18" : "#0d1822", border: `1px solid ${weightPos ? "#1a5a2a" : "#1a2a3a"}`, color: weightPos ? "#00cc66" : "#3a5060", borderRadius: "2px", cursor: "pointer" }}>▲ Amplifies</button>
+        <button type="button" onClick={() => setWeightPos(false)} style={{ padding: "4px 10px", fontSize: "10px", background: !weightPos ? "#2a0a0a" : "#0d1822", border: `1px solid ${!weightPos ? "#5a1a1a" : "#1a2a3a"}`, color: !weightPos ? "#cc2233" : "#3a5060", borderRadius: "2px", cursor: "pointer" }}>▼ Erodes</button>
+      </div>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <button type="button" onClick={save} style={{ padding: "6px 12px", fontSize: "10px", background: "#0d2a3a", border: "1px solid #1a4a5a", color: "#5ab4d4", borderRadius: "2px", cursor: "pointer" }}>Save</button>
+        <button type="button" onClick={onClose} style={{ padding: "6px 12px", fontSize: "10px", background: "transparent", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>Close</button>
+        <button type="button" onClick={() => { if (typeof window !== "undefined" && window.confirm("Delete this connection?")) onDelete(link.source, link.target); }} style={{ padding: "6px 12px", fontSize: "10px", background: "#2a0a0a", border: "1px solid #5a1a1a", color: "#cc4455", borderRadius: "2px", cursor: "pointer" }}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ onAddConnection, addingLinkSource, onRegister, onSave, onLoad, saveToken, setSaveToken, saveStatus }) {
+  const [loadKeyInput, setLoadKeyInput] = useState("");
   return (
     <div style={{ color: "#1e3040", fontSize: "11px", lineHeight: "1.8" }}>
-      <div style={{ marginBottom: "16px", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>ABOUT</div>
-      <div style={{ color: "#2a4060", lineHeight: "1.9" }}>
-        Each major AI policy stance — open-sourcing, alignment research, and a global pause — contains a distinct structural pathway to power concentration.
-        <br /><br />
-        This graph maps the causal dependencies between AI policy choices, risk factors, and totalitarian outcomes.
-        <br /><br />
-        <span style={{ color: "#1e3040" }}>
-          Green edges amplify. Dashed red edges erode or resist. Concentric rings mark terminal states.
-        </span>
+      <div style={{ marginBottom: "12px", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>CONNECTIONS</div>
+      <button type="button" onClick={onAddConnection} style={{ marginBottom: "16px", padding: "6px 12px", fontSize: "10px", background: addingLinkSource !== null ? "#1a3a4a" : "#0d1822", border: "1px solid #1a2a3a", color: "#5a9ab8", borderRadius: "2px", cursor: "pointer" }}>
+        {addingLinkSource !== null ? "Cancel add connection" : "Add connection"}
+      </button>
+
+      <div style={{ marginBottom: "12px", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>SAVE / LOAD (no password)</div>
+      <p style={{ fontSize: "10px", color: "#3a5060", marginBottom: "8px" }}>Register to get a key. Save stores your connections. Use the same key elsewhere to load.</p>
+      {!saveToken ? (
+        <button type="button" onClick={onRegister} style={{ padding: "6px 12px", fontSize: "10px", background: "#0d2a3a", border: "1px solid #1a4a5a", color: "#5ab4d4", borderRadius: "2px", cursor: "pointer", marginBottom: "8px" }}>Register (get key)</button>
+      ) : (
+        <>
+          <div style={{ fontSize: "9px", color: "#3a5060", marginBottom: "4px", wordBreak: "break-all" }}>Key: {saveToken}</div>
+          <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+            <button type="button" onClick={onSave} style={{ padding: "5px 10px", fontSize: "9px", background: "#0d2a3a", border: "1px solid #1a4a5a", color: "#5ab4d4", borderRadius: "2px", cursor: "pointer" }}>Save</button>
+            <button type="button" onClick={() => onLoad()} style={{ padding: "5px 10px", fontSize: "9px", background: "transparent", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>Load</button>
+          </div>
+        </>
+      )}
+      <div style={{ marginTop: "10px", fontSize: "9px", color: "#3a5060" }}>Or load with key:</div>
+      <input value={loadKeyInput} onChange={(e) => setLoadKeyInput(e.target.value)} placeholder="Paste key from another device" style={{ width: "100%", marginTop: "4px", marginBottom: "6px", background: "#0a1420", border: "1px solid #1a2a3a", color: "#5a7080", fontSize: "10px", padding: "5px 8px", borderRadius: "2px", boxSizing: "border-box" }} />
+      <button type="button" onClick={() => { const t = loadKeyInput.trim(); if (t) { setSaveToken(t); onLoad(t); } }} style={{ padding: "5px 10px", fontSize: "9px", background: "transparent", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>Load with this key</button>
+      {saveStatus && <div style={{ fontSize: "10px", color: saveStatus.startsWith("error") ? "#aa4444" : "#3a6060", marginTop: "4px" }}>{saveStatus}</div>}
+
+      <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #0d1822", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>ABOUT</div>
+      <div style={{ color: "#2a4060", lineHeight: "1.9", marginTop: "6px" }}>
+        Each major AI policy stance contains a distinct structural pathway to power concentration. This graph maps causal dependencies. Green edges amplify; dashed red erode or resist.
       </div>
-      <div style={{ marginTop: "20px", borderTop: "1px solid #0d1822", paddingTop: "14px", fontSize: "9px", color: "#1e2a38", letterSpacing: "1px" }}>
-        CLICK ANY NODE TO INSPECT ITS ROLE IN THE PATHWAY
+      <div style={{ marginTop: "12px", fontSize: "9px", color: "#1e2a38", letterSpacing: "1px" }}>
+        CLICK NODE TO INSPECT · CLICK EDGE TO EDIT
       </div>
     </div>
   );

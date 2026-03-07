@@ -1,0 +1,3 @@
+# Not used when building from repo root with -f Dockerfile.api;
+# add a root .dockerignore.api or rely on explicit COPY paths.
+node_modules
