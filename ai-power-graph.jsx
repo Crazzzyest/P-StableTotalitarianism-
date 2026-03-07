@@ -265,8 +265,25 @@ export default function AiPowerGraph() {
     setSelected(null);
   };
 
-  const apiBase = "";
+  const rawApi = typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL ? String(import.meta.env.VITE_API_URL).trim().replace(/\/$/, "") : "";
+  const apiBase = rawApi && !/^https?:\/\//i.test(rawApi) ? `https://${rawApi}` : rawApi;
   const authHeaders = () => (authToken ? { Authorization: `Bearer ${authToken}` } : {});
+
+  const parseJson = async (res) => {
+    const text = await res.text();
+    if (text.trimStart().startsWith("<")) {
+      throw new Error(
+        apiBase
+          ? "API returned HTML. VITE_API_URL should be your backend service URL (the one built with Dockerfile.api), not the frontend. Use the backend's Public Endpoint with https://."
+          : "API returned HTML. Is the backend running? In production, deploy the API as a separate service and set VITE_API_URL to its URL (e.g. https://your-api.sliplane.app)."
+      );
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error("Invalid response: " + (text.slice(0, 80) || res.status));
+    }
+  };
 
   const register = async (u, p) => {
     try {
@@ -275,7 +292,7 @@ export default function AiPowerGraph() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: u, password: p }),
       });
-      const data = await res.json();
+      const data = await parseJson(res);
       if (data.error) { setSaveStatus(data.error); return; }
       if (data.token) {
         localStorage.setItem("graph_auth_token", data.token);
@@ -295,7 +312,7 @@ export default function AiPowerGraph() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: u, password: p }),
       });
-      const data = await res.json();
+      const data = await parseJson(res);
       if (data.error) { setSaveStatus(data.error); return; }
       if (data.token) {
         localStorage.setItem("graph_auth_token", data.token);
@@ -324,7 +341,9 @@ export default function AiPowerGraph() {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ links }),
       });
-      if (!res.ok) { const t = await res.text(); throw new Error(t); }
+      const data = await parseJson(res).catch((e) => { throw e; });
+      if (data?.error) { setSaveStatus(data.error); return; }
+      if (!res.ok) throw new Error(data?.error || res.statusText);
       setSaveStatus("Saved.");
     } catch (e) {
       setSaveStatus("Error: " + (e.message || "Save failed"));
@@ -334,8 +353,9 @@ export default function AiPowerGraph() {
     if (!authToken) { setSaveStatus("Log in first."); return; }
     try {
       const res = await fetch(`${apiBase}/api/load`, { headers: authHeaders() });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = await parseJson(res).catch((e) => { throw e; });
+      if (data?.error) { setSaveStatus(data.error); return; }
+      if (!res.ok) throw new Error(data?.error || res.statusText);
       if (data.links && Array.isArray(data.links)) {
         setLinks(data.links);
         setSaveStatus("Loaded.");

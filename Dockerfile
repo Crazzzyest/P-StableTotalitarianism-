@@ -7,6 +7,10 @@ WORKDIR /app
 ARG GEMINI_API_KEY=
 ENV GEMINI_API_KEY=$GEMINI_API_KEY
 
+# Backend API URL – must be set at *build* time so Vite can bake it in (e.g. Sliplane build args)
+ARG VITE_API_URL=
+ENV VITE_API_URL=$VITE_API_URL
+
 COPY package.json package-lock.json* ./
 RUN npm install
 

@@ -2,12 +2,18 @@
 
 Minimal Express API: register/login (username + password, stored plainly) and save/load graph per user. Session token returned on login/register; use `Authorization: Bearer <token>` for save/load.
 
-## Deploy to Sliplane
+## Deploy to Sliplane (two services)
 
-1. In Sliplane, create a **new service** (separate from the frontend).
-2. Point it at this repo and set the **Dockerfile path** to `Dockerfile.api` (build context = repo root).
-3. Set **port** to `3001` (or whatever `PORT` you set in the service env).
-4. Optional: add a **volume** for `/app/data` if you want saved data to persist across redeploys.
+You need **two separate services**:
+
+1. **Frontend** – your existing app (Dockerfile → nginx serving the SPA). Its Public Endpoint is the site users visit.
+2. **Backend (this API)** – create a **new** service:
+   - Same repo; set **Dockerfile path** to `Dockerfile.api` (build context = repo root).
+   - Expose port **3001**.
+   - After deploy, copy this service’s **Public Endpoint** (e.g. `https://your-api-name.sliplane.app`).
+
+Set `VITE_API_URL` **at build time** (Vite bakes it in). In Sliplane, add a **build argument** for the frontend: `VITE_API_URL` = `https://your-backend-public-endpoint.sliplane.app`  
+(use the **backend** service’s URL, not the frontend). Rebuild and redeploy the frontend so login/save/load hit the API.
 
 ## Local
 
