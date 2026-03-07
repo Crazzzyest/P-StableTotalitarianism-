@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import * as d3 from "d3";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 const NODES = [
   {
@@ -116,17 +115,31 @@ const CATEGORY_META = {
 const GRAPH_WIDTH = 800;
 const GRAPH_HEIGHT = 600;
 
+const cx = GRAPH_WIDTH / 2;
+const cy = GRAPH_HEIGHT / 2;
+const RING_RADIUS = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) * 0.38;
+
+function getRingPositions() {
+  const n = NODES.length;
+  const positions = {};
+  for (let i = 0; i < n; i++) {
+    const angle = -Math.PI / 2 + (i / n) * 2 * Math.PI;
+    positions[NODES[i].id] = {
+      x: cx + RING_RADIUS * Math.cos(angle),
+      y: cy + RING_RADIUS * Math.sin(angle),
+    };
+  }
+  return positions;
+}
+
+const RING_POSITIONS = getRingPositions();
+
 export default function AiPowerGraph() {
   const containerRef = useRef(null);
-  const [positions, setPositions] = useState({});
   const [selected, setSelected] = useState(null);
   const [hovered, setHovered] = useState(null);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
-  const [positionsLocked, setPositionsLocked] = useState(false);
-  const simRef = useRef(null);
-  const nodesRef = useRef(null);
-  const linksRef = useRef(null);
-  const savedPositionsRef = useRef({});
+  const positions = RING_POSITIONS;
 
   useEffect(() => {
     const update = () => {
@@ -139,81 +152,6 @@ export default function AiPowerGraph() {
     const ro = new ResizeObserver(update);
     if (containerRef.current) ro.observe(containerRef.current);
     return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const w = GRAPH_WIDTH;
-    const h = GRAPH_HEIGHT;
-    const saved = savedPositionsRef.current;
-
-    const nodeData = NODES.map(n => {
-      const savedPos = saved[n.id];
-      return {
-        ...n,
-        x: savedPos ? savedPos.x : (n.x !== undefined ? n.x : w / 2 + (Math.random() - 0.5) * 200),
-        y: savedPos ? savedPos.y : (n.y !== undefined ? n.y : h / 2 + (Math.random() - 0.5) * 200),
-      };
-    });
-    const linkData = LINKS.map(l => ({ ...l }));
-
-    nodesRef.current = nodeData;
-    linksRef.current = linkData;
-
-    if (simRef.current) simRef.current.stop();
-
-    const sim = d3.forceSimulation(nodeData)
-      .force("link", d3.forceLink(linkData).id(d => d.id).distance(160).strength(0.4))
-      .force("charge", d3.forceManyBody().strength(-600))
-      .force("center", d3.forceCenter(w / 2, h / 2).strength(0.05))
-      .force("collision", d3.forceCollide(52))
-      .on("tick", () => {
-        const pos = {};
-        nodeData.forEach(n => { pos[n.id] = { x: n.x, y: n.y }; });
-        setPositions({ ...pos });
-      });
-
-    if (positionsLocked) {
-      nodeData.forEach(n => { n.fx = n.x; n.fy = n.y; });
-      sim.stop();
-      const pos = {};
-      nodeData.forEach(n => { pos[n.id] = { x: n.x, y: n.y }; });
-      setPositions(pos);
-    }
-
-    simRef.current = sim;
-    return () => sim.stop();
-  }, [containerSize, positionsLocked]);
-
-  const onDrag = useCallback((id, mx, my) => {
-    const n = nodesRef.current?.find(x => x.id === id);
-    if (!n || !simRef.current) return;
-    n.fx = (n.fx ?? n.x) + mx;
-    n.fy = (n.fy ?? n.y) + my;
-    n.x = n.fx; n.y = n.fy;
-    simRef.current.alpha(0.3).restart();
-  }, []);
-
-  const onDragEnd = useCallback((id) => {
-    const n = nodesRef.current?.find(x => x.id === id);
-    if (n) { n.fx = null; n.fy = null; }
-  }, []);
-
-  const onLockPositions = useCallback(() => {
-    const nodes = nodesRef.current;
-    if (!nodes) return;
-    const next = {};
-    nodes.forEach(n => { next[n.id] = { x: n.x, y: n.y }; });
-    savedPositionsRef.current = next;
-    nodes.forEach(n => { n.fx = n.x; n.fy = n.y; });
-    if (simRef.current) simRef.current.stop();
-    setPositionsLocked(true);
-  }, []);
-
-  const onUnlockPositions = useCallback(() => {
-    const nodes = nodesRef.current;
-    if (nodes) nodes.forEach(n => { n.fx = null; n.fy = null; });
-    if (simRef.current) simRef.current.alpha(0.3).restart();
-    setPositionsLocked(false);
   }, []);
 
   const highlighted = useMemo(() => {
@@ -342,42 +280,18 @@ export default function AiPowerGraph() {
                 <NodeGroup key={node.id} id={node.id} x={pos.x} y={pos.y} r={r}
                   color={meta.color} isSel={isSel} isHov={isHov} isDim={isDim}
                   words={words} category={node.category}
-                  positionsLocked={positionsLocked}
                   onSelect={() => setSelected(isSel ? null : node)}
                   onHover={() => setHovered(node.id)} onHoverEnd={() => setHovered(null)}
-                  onDrag={onDrag} onDragEnd={onDragEnd}
                 />
               );
             })}
           </svg>
 
-          {/* Lock + hint */}
-          <div style={{ position: "absolute", bottom: "12px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", pointerEvents: "none" }}>
-            <div style={{ pointerEvents: "auto" }}>
-              <button
-                type="button"
-                onClick={positionsLocked ? onUnlockPositions : onLockPositions}
-                style={{
-                  padding: "6px 12px",
-                  fontSize: "11px",
-                  letterSpacing: "1px",
-                  color: positionsLocked ? "#7a90a8" : "#2a4060",
-                  background: positionsLocked ? "#0d1822" : "#1a2a3a",
-                  border: "1px solid #0d1822",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontFamily: "'IBM Plex Mono', monospace",
-                }}
-              >
-                {positionsLocked ? "🔓 Unlock positions" : "🔒 Lock positions"}
-              </button>
+          {!selected && !hovered && (
+            <div style={{ position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", letterSpacing: "3px", color: "#1e3040", pointerEvents: "none" }}>
+              CLICK NODE TO INSPECT
             </div>
-            {!selected && !hovered && (
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#1e3040" }}>
-                CLICK NODE TO INSPECT · DRAG TO REPOSITION
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Right panel - below graph on mobile so it doesn't hide the graph */}
@@ -395,31 +309,13 @@ export default function AiPowerGraph() {
   );
 }
 
-function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, positionsLocked, onSelect, onHover, onHoverEnd, onDrag, onDragEnd }) {
-  const dragging = useRef(false);
-  const startPos = useRef(null);
+function NodeGroup({ id, x, y, r, color, isSel, isHov, isDim, words, category, onSelect, onHover, onHoverEnd }) {
   const isTerminal = category === "terminal";
   const isOutcome = category === "outcome" || isTerminal;
 
   const onMouseDown = (e) => {
     e.stopPropagation();
-    if (positionsLocked) { onSelect(); return; }
-    dragging.current = false;
-    startPos.current = { x: e.clientX, y: e.clientY };
-    const onMove = (ev) => {
-      if (Math.abs(ev.clientX - startPos.current.x) + Math.abs(ev.clientY - startPos.current.y) > 4) {
-        dragging.current = true;
-        onDrag(id, ev.movementX, ev.movementY);
-      }
-    };
-    const onUp = () => {
-      if (!dragging.current) onSelect();
-      else onDragEnd(id);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    onSelect();
   };
 
   const op = isDim ? 0.12 : 1;
