@@ -181,11 +181,11 @@ const CATEGORY_META = {
   terminal: { color: "#cc1122", label: "Terminal State" },
 };
 
-// Column layout: left to right, order 0..9. Scrollable canvas.
-const COL_W = 240;
-const ROW_H = 100;
-const PAD_X = 80;
-const PAD_Y = 60;
+// Column layout: left-to-right by causal distance (like reference). Wide canvas so you scroll horizontally.
+const COL_W = 280;
+const ROW_H = 90;
+const PAD_X = 100;
+const PAD_Y = 80;
 const NUM_COLUMNS = 10;
 // Column 0 (Root) -> Column 9 (Terminal). Each entry is ordered list of node ids (top to bottom).
 const COLUMN_ORDER = [
@@ -201,15 +201,17 @@ const COLUMN_ORDER = [
   ["totalitarianism"],
 ];
 const GRAPH_WIDTH = NUM_COLUMNS * COL_W + PAD_X * 2;
-const GRAPH_HEIGHT = 1000;
+const GRAPH_HEIGHT = 1100;
 
 const BASE_R = { policy: 20, ai: 20, risk: 18, social: 18, state: 18, outcome: 30, terminal: 40 };
 const getR = (node) => BASE_R[node.category ?? node.cat] ?? 18;
 
 function computeColumnPositions(nodes, manualPos) {
   const idToColRow = {};
+  const colCounts = [];
   COLUMN_ORDER.forEach((ids, col) => {
     ids.forEach((id, row) => { idToColRow[id] = { col, row }; });
+    colCounts[col] = ids.length;
   });
   const pos = {};
   nodes.forEach((n) => {
@@ -220,13 +222,17 @@ function computeColumnPositions(nodes, manualPos) {
     }
     const cr = idToColRow[n.id];
     if (cr != null) {
+      const nInCol = colCounts[cr.col] || 1;
+      const blockH = (nInCol - 1) * ROW_H;
+      const cy = GRAPH_HEIGHT / 2;
+      const y = cy - blockH / 2 + cr.row * ROW_H + ROW_H / 2;
       pos[n.id] = {
         x: PAD_X + cr.col * COL_W + COL_W / 2,
-        y: PAD_Y + cr.row * ROW_H + ROW_H / 2,
+        y,
       };
       return;
     }
-    pos[n.id] = { x: PAD_X + COL_W / 2, y: PAD_Y + ROW_H / 2 };
+    pos[n.id] = { x: PAD_X + COL_W / 2, y: GRAPH_HEIGHT / 2 };
   });
   return pos;
 }
@@ -446,7 +452,10 @@ export default function AiPowerGraph() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,700;1,400&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: #0a0f14; } ::-webkit-scrollbar-thumb { background: #1a2a3a; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-track { background: #0a0f14; } ::-webkit-scrollbar-thumb { background: #1a2a3a; border-radius: 3px; }
+        .graph-canvas { overflow: auto; }
+        .graph-canvas::-webkit-scrollbar { width: 10px; height: 10px; }
+        .graph-canvas::-webkit-scrollbar-thumb { background: #2a3a4a; }
         .node-g { cursor: pointer; }
         .node-g:hover circle.main { filter: brightness(1.6); }
         @media (max-width: 768px) {
@@ -467,14 +476,14 @@ export default function AiPowerGraph() {
         </h1>
       </div>
 
-      <div className="graph-layout" style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
-        {/* Graph canvas - scrollable to see all columns */}
-        <div ref={containerRef} className="graph-canvas" style={{ flex: 1, position: "relative", overflow: "auto", minHeight: 280 }}>
+      <div className="graph-layout" style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0, minWidth: 0 }}>
+        {/* Graph canvas: fixed-size SVG inside scroll container so you can scroll across the full graph */}
+        <div ref={containerRef} className="graph-canvas" style={{ flex: 1, position: "relative", overflow: "auto", minHeight: 280, minWidth: 0 }}>
           <svg
             width={GRAPH_WIDTH}
             height={GRAPH_HEIGHT}
             viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-            style={{ display: "block", minWidth: "100%" }}
+            style={{ display: "block" }}
           >
             <defs>
               {["pos", "neg", "pos-dim", "neg-dim"].map(k => {
@@ -564,8 +573,8 @@ export default function AiPowerGraph() {
             })}
           </svg>
 
-          <div style={{ position: "absolute", bottom: "16px", left: "50%", transform: "translateX(-50%)", fontSize: "9px", letterSpacing: "3px", color: "#1e3040", pointerEvents: "none", textAlign: "center" }}>
-            {addingLinkSource ? (addingLinkSource === "" ? "Click source node" : "Click target node") : !selected && !hovered ? "CLICK NODE TO INSPECT · CLICK EDGE TO EDIT" : null}
+          <div style={{ position: "absolute", bottom: "16px", left: "16px", fontSize: "9px", letterSpacing: "2px", color: "#1e3040", pointerEvents: "none" }}>
+            {addingLinkSource ? (addingLinkSource === "" ? "Click source node" : "Click target node") : !selected && !hovered ? "CLICK NODE · CLICK EDGE TO EDIT · SCROLL TO SEE FULL CHAIN" : null}
           </div>
         </div>
 
@@ -823,10 +832,10 @@ function EmptyState({ onAddConnection, addingLinkSource, onRegister, onLogin, on
 
       <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #0d1822", color: "#2a4060", letterSpacing: "2px", fontSize: "8px" }}>ABOUT</div>
       <div style={{ color: "#2a4060", lineHeight: "1.9", marginTop: "6px" }}>
-        Each major AI policy stance contains a distinct structural pathway to power concentration. This graph maps causal dependencies. Green edges amplify; dashed red erode or resist.
+        Nodes are arranged left-to-right by causal distance — each column shows effects of the prior column. <strong style={{ color: "#3a5060" }}>Scroll horizontally to traverse the full chain.</strong> Green edges amplify; dashed red erode or resist.
       </div>
       <div style={{ marginTop: "12px", fontSize: "9px", color: "#1e2a38", letterSpacing: "1px" }}>
-        CLICK NODE TO INSPECT · CLICK EDGE TO EDIT
+        CLICK NODE TO INSPECT · CLICK EDGE TO EDIT · SCROLL TO SEE ALL COLUMNS
       </div>
     </div>
   );
