@@ -1,240 +1,18 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-
-const NODES = [
-  {
-    id: "open_source", label: "Open-Source AI", category: "policy",
-    description: "Releasing AI model weights publicly — enabling anyone to run, modify, and weaponize models without gatekeeping or oversight.",
-    threat: "Lowers the barrier to mass-casualty attacks using AI-designed pathogens or autonomous weapon systems. One successful attack triggers the legislative cascade.",
-  },
-  {
-    id: "interpretability", label: "Interpretability Research", category: "policy",
-    description: "Mechanistic understanding of how neural networks encode concepts, values, and behavioral dispositions at the circuit level.",
-    threat: "The same tools that let us read values from weights can write them. Once interpretability matures, sculpting loyalty to a specific beneficiary becomes an engineering problem.",
-  },
-  {
-    id: "ai_pause", label: "AI Pause / Moratorium", category: "policy",
-    description: "International agreement to halt frontier AI development above a capability threshold — requiring global coordination and enforcement.",
-    threat: "Any body powerful enough to enforce a pause — with inspection rights, satellite monitoring, compute tracking — is powerful enough to impose other policy unilaterally.",
-  },
-  {
-    id: "ai_capability", label: "AI Capability", category: "ai",
-    description: "Raw power and autonomy of frontier AI systems — encompassing reasoning, persuasion, scientific discovery, and strategic planning.",
-    threat: "Higher capability amplifies both beneficial applications and catastrophic misuse. The same system that accelerates drug discovery accelerates pathogen design.",
-  },
-  {
-    id: "mass_casualty", label: "Mass Casualty Event", category: "risk",
-    description: "A catastrophic attack — biological, chemical, radiological, or autonomous — killing thousands to millions and attributed to AI-enabled actors.",
-    threat: "Historical precedent is unambiguous: mass-casualty events produce rapid, sweeping expansions of state power that outlast the emergency by decades.",
-  },
-  {
-    id: "nuclear_risk", label: "Nuclear Risk", category: "risk",
-    description: "Probability of nuclear weapon use — by state actors, non-state groups acquiring materials, or AI-optimized targeting and command manipulation.",
-    threat: "AI accelerates both offensive capability (targeting, yield optimization) and the information asymmetries that make preemptive strikes more tempting.",
-  },
-  {
-    id: "public_fear", label: "Public Fear", category: "social",
-    description: "Generalized anxiety and demand for security among the population following catastrophic events — providing the mandate for emergency legislation.",
-    threat: "Fear is historically the most reliable mandate for laws that would otherwise be unpassable. Emergency legislation rarely includes its own sunset clauses.",
-  },
-  {
-    id: "emergency_powers", label: "Emergency Powers", category: "state",
-    description: "Extraordinary executive authority invoked during crisis — bypassing legislative scrutiny, judicial review, and constitutional constraints.",
-    threat: "Emergency powers are rarely fully rescinded. Each crisis leaves a residual expansion of executive authority that becomes the new baseline.",
-  },
-  {
-    id: "surveillance", label: "Mass Surveillance", category: "state",
-    description: "AI-enabled monitoring of communications, movement, financial activity, and social graphs at population scale in near real-time.",
-    threat: "Real-time behavior prediction and preemptive suppression of dissent becomes technically feasible. Opposition organizing becomes nearly impossible.",
-  },
-  {
-    id: "alignment_capture", label: "Alignment Capture", category: "risk",
-    description: "The use of interpretability and fine-tuning tools to mechanistically encode loyalty to a specific individual or group — rather than to humanity broadly.",
-    threat: "Not a distant scenario. The infrastructure for alignment capture is being built now, sold as safety tooling. The same levers that steer AI away from harm can steer it toward unconditional service.",
-  },
-  {
-    id: "world_gov", label: "Supranational Authority", category: "state",
-    description: "A world government or enforcement body with authority to monitor, sanction, and intervene in AI development and deployment globally.",
-    threat: "No historical precedent for a benign supranational authority with this scope of enforcement power. The incentive to mission-creep is structurally identical to other power concentration risks.",
-  },
-  {
-    id: "civil_liberties", label: "Civil Liberties", category: "social",
-    description: "Legal protections for speech, association, privacy, and due process — the structural prerequisites for democratic accountability.",
-    threat: "Erosion is rarely sudden. Each increment seems proportionate to the crisis at hand. The cumulative result is only visible in retrospect.",
-  },
-  {
-    id: "democratic_resilience", label: "Democratic Resilience", category: "social",
-    description: "Institutional capacity to resist concentration of power — through checks, balances, press freedom, opposition parties, and civic norms.",
-    threat: "Resilience degrades slowly then fails suddenly when accumulated stress exceeds institutional capacity. AI-enabled surveillance dramatically accelerates this threshold crossing.",
-  },
-  {
-    id: "power_concentration", label: "Power Concentration", category: "outcome",
-    description: "Decision-making authority accumulated in a small number of actors — whether states, AI labs, or supranational bodies — with limited accountability.",
-    threat: "The common structural endpoint of all three AI policy pathways under adversarial conditions. Each pathway has a distinct mechanism but converges on the same configuration.",
-  },
-  {
-    id: "totalitarianism", label: "Stable Totalitarianism", category: "terminal",
-    description: "Near-total control over political, economic, and social life — potentially durable in a way no previous totalitarian system has been.",
-    threat: "AI-enabled totalitarianism may be uniquely permanent: real-time surveillance, loyalty-optimized AI agents, preemptive suppression, and no historical analogue for resistance under these conditions.",
-  },
-  {
-    id: "aging_cured", label: "Aging Cured", category: "ai",
-    description: "AI-enabled defeat of biological aging — existing power holders and coalition members no longer die of natural causes.",
-    threat: "The succession problem in totalitarian regimes stems from needing to recruit new coalition members as old ones die. Curing aging eliminates succession pressure entirely; the ruling coalition can remain permanently fixed.",
-  },
-  {
-    id: "regime_stability", label: "Regime Stability", category: "outcome",
-    description: "The succession question in totalitarian regimes is a problem stemming from adding new people to the ruling coalition as older members die. Technologies that remove succession pressure (e.g. longevity, perfect loyalty detection) directly enable regime stability.",
-    threat: "Without succession pressure, totalitarian structures can become indefinitely stable with no destabilizing turnover.",
-  },
-  {
-    id: "perfect_lie_detection", label: "Perfect Lie Detection", category: "ai",
-    description: "AI systems capable of identifying deception with near-certainty — applied to loyalty testing, interrogation, and political vetting.",
-    threat: "Eliminates the ability to form covert opposition or pretend loyalty while organizing resistance. The winning coalition can be shrunk to only verified loyalists.",
-  },
-  { id: "node_mmhmhcta", label: "Interpretability", category: "ai", description: "", threat: "" },
-  { id: "node_mmhmk80k", label: "AI enabled bad actors", category: "risk", description: "", threat: "" },
-  { id: "military_ai_race", label: "Military AI Race", category: "ai", description: "State competition to develop AI for targeting, autonomous weapons, ISR, and cyber offense.", threat: "Compresses decision timelines, increases first-strike incentives." },
-  { id: "mass_unemployment", label: "Mass Unemployment", category: "risk", description: "Structural displacement as AI automates knowledge economy work.", threat: "Precarity fuels radicalization and demand for strongman solutions." },
-  { id: "info_ecosystem_collapse", label: "Info Ecosystem Collapse", category: "risk", description: "Breakdown of shared epistemic foundations — AI-generated content drowns signal.", threat: "Radicalization accelerates; consent manufacturing becomes trivially cheap." },
-  { id: "political_radicalization", label: "Political Radicalization", category: "social", description: "Polarization past the point where opposing factions share institutional legitimacy.", threat: "Creates pressure for emergency measures." },
-  { id: "consent_manufacturing", label: "Consent Manufacturing", category: "state", description: "AI-enabled personalized persuasion at scale.", threat: "Dissolves the distinction between genuine democratic mandate and manufactured one." },
-  { id: "winning_coalition", label: "Winning Coalition Size ↓", category: "social", description: "The minimum number of people a leader must satisfy to remain in power. AI enables this to shrink dramatically.", threat: "Large coalition forces leaders to provide public goods; small coalition makes private benefits sufficient." },
-];
-
-function normalizeNode(n) {
-  const label = Array.isArray(n.label) ? n.label : (n.label != null ? String(n.label).split(" ") : []);
-  const cat = n.cat ?? n.category;
-  return { id: n.id, label, category: cat, description: n.desc ?? n.description ?? "", threat: n.threat ?? "" };
-}
-
-const DEFAULT_NODES = NODES.map(normalizeNode);
-
-const LINKS = [
-  { source: "open_source", target: "ai_capability", weight: 1, label: "accelerates" },
-  { source: "open_source", target: "mass_casualty", weight: 1, label: "enables" },
-  { source: "open_source", target: "democratic_resilience", weight: 1, label: "distributes power" },
-  { source: "ai_capability", target: "military_ai_race", weight: 1, label: "fuels" },
-  { source: "ai_capability", target: "mass_unemployment", weight: 1, label: "drives" },
-  { source: "ai_capability", target: "info_ecosystem_collapse", weight: 1, label: "enables" },
-  { source: "ai_capability", target: "world_gov", weight: 1, label: "demands governance" },
-  { source: "ai_capability", target: "mass_casualty", weight: 0.55, label: "amplifies" },
-  { source: "ai_capability", target: "nuclear_risk", weight: 0.45, label: "amplifies" },
-  { source: "ai_capability", target: "surveillance", weight: 0.6, label: "supercharges" },
-  { source: "mass_casualty", target: "public_fear", weight: 0.85, label: "triggers" },
-  { source: "mass_casualty", target: "emergency_powers", weight: 0.75, label: "mandates" },
-  { source: "nuclear_risk", target: "public_fear", weight: 0.6, label: "intensifies" },
-  { source: "public_fear", target: "emergency_powers", weight: 0.65, label: "demands" },
-  { source: "emergency_powers", target: "civil_liberties", weight: -0.75, label: "erodes" },
-  { source: "emergency_powers", target: "surveillance", weight: 0.8, label: "expands" },
-  { source: "surveillance", target: "power_concentration", weight: 0.75, label: "enables" },
-  { source: "surveillance", target: "democratic_resilience", weight: -0.65, label: "degrades" },
-  { source: "world_gov", target: "power_concentration", weight: 1, label: "concentrates" },
-  { source: "civil_liberties", target: "democratic_resilience", weight: 0.7, label: "sustains" },
-  { source: "democratic_resilience", target: "power_concentration", weight: -0.8, label: "resists" },
-  { source: "power_concentration", target: "totalitarianism", weight: 0.9, label: "becomes" },
-  { source: "ai_capability", target: "aging_cured", weight: 1, label: "enables" },
-  { source: "ai_capability", target: "perfect_lie_detection", weight: 1, label: "enables" },
-  { source: "aging_cured", target: "totalitarianism", weight: 1, label: "stabilizes" },
-  { source: "aging_cured", target: "winning_coalition", weight: -1, label: "shrinks" },
-  { source: "perfect_lie_detection", target: "winning_coalition", weight: -1, label: "shrinks" },
-  { source: "node_mmhmhcta", target: "node_mmhmk80k", weight: 1, label: "enables" },
-  { source: "node_mmhmk80k", target: "mass_casualty", weight: 1, label: "enables" },
-  { source: "military_ai_race", target: "nuclear_risk", weight: 1, label: "escalates" },
-  { source: "military_ai_race", target: "emergency_powers", weight: 1, label: "justifies" },
-  { source: "military_ai_race", target: "power_concentration", weight: 1, label: "drives" },
-  { source: "mass_unemployment", target: "political_radicalization", weight: 1, label: "fuels" },
-  { source: "mass_unemployment", target: "public_fear", weight: 1, label: "amplifies" },
-  { source: "mass_unemployment", target: "winning_coalition", weight: -1, label: "shrinks" },
-  { source: "info_ecosystem_collapse", target: "political_radicalization", weight: 1, label: "accelerates" },
-  { source: "info_ecosystem_collapse", target: "democratic_resilience", weight: -1, label: "degrades" },
-  { source: "info_ecosystem_collapse", target: "consent_manufacturing", weight: 1, label: "enables" },
-  { source: "political_radicalization", target: "emergency_powers", weight: 1, label: "justifies" },
-  { source: "political_radicalization", target: "democratic_resilience", weight: -1, label: "degrades" },
-  { source: "consent_manufacturing", target: "power_concentration", weight: 1, label: "enables" },
-  { source: "consent_manufacturing", target: "democratic_resilience", weight: -1, label: "undermines" },
-  { source: "consent_manufacturing", target: "winning_coalition", weight: -1, label: "shrinks" },
-  { source: "world_gov", target: "civil_liberties", weight: -1, label: "threatens" },
-  { source: "world_gov", target: "surveillance", weight: 1, label: "requires" },
-  { source: "civil_liberties", target: "democratic_resilience", weight: 1, label: "sustains" },
-  { source: "democratic_resilience", target: "power_concentration", weight: -1, label: "resists" },
-  { source: "winning_coalition", target: "power_concentration", weight: -1, label: "constrains" },
-  { source: "winning_coalition", target: "totalitarianism", weight: -1, label: "prevents" },
-];
+import { useState, useRef, useMemo } from "react";
+import {
+  GRAPH_SPEC,
+  DEFAULT_NODES,
+  DEFAULT_LINKS,
+  CATEGORY_META,
+  GRAPH_WIDTH,
+  GRAPH_HEIGHT,
+  getR,
+  computePositions,
+  normalizeLinkForLoad,
+} from "./src/graph-spec.js";
 
 function normalizeLink(l) {
-  return {
-    source: l.source ?? l.s,
-    target: l.target ?? l.t,
-    weight: typeof l.weight === "number" ? l.weight : (typeof l.w === "number" ? l.w : 1),
-    label: l.label ?? l.lbl ?? "enables",
-    color: l.color,
-  };
-}
-
-const CATEGORY_META = {
-  policy:   { color: "#1e6091", label: "AI Policy" },
-  ai:       { color: "#0a7251", label: "AI Systems" },
-  risk:     { color: "#8b1a1a", label: "Risk Factors" },
-  state:    { color: "#7a5200", label: "State Power" },
-  social:   { color: "#1a5c6e", label: "Social Fabric" },
-  outcome:  { color: "#6e1a5c", label: "Outcome" },
-  terminal: { color: "#cc1122", label: "Terminal State" },
-};
-
-// Column layout: left-to-right by causal distance (like reference). Wide canvas so you scroll horizontally.
-const COL_W = 280;
-const ROW_H = 90;
-const PAD_X = 100;
-const PAD_Y = 80;
-const NUM_COLUMNS = 10;
-// Column 0 (Root) -> Column 9 (Terminal). Each entry is ordered list of node ids (top to bottom).
-const COLUMN_ORDER = [
-  ["open_source", "node_mmhmhcta", "node_mmhmk80k"],
-  ["ai_capability", "mass_casualty"],
-  ["military_ai_race", "mass_unemployment", "info_ecosystem_collapse", "world_gov", "aging_cured", "perfect_lie_detection"],
-  ["nuclear_risk", "political_radicalization", "consent_manufacturing"],
-  ["public_fear"],
-  ["emergency_powers"],
-  ["surveillance", "civil_liberties"],
-  ["winning_coalition", "democratic_resilience"],
-  ["power_concentration"],
-  ["totalitarianism"],
-];
-const GRAPH_WIDTH = NUM_COLUMNS * COL_W + PAD_X * 2;
-const GRAPH_HEIGHT = 1100;
-
-const BASE_R = { policy: 20, ai: 20, risk: 18, social: 18, state: 18, outcome: 30, terminal: 40 };
-const getR = (node) => BASE_R[node.category ?? node.cat] ?? 18;
-
-function computeColumnPositions(nodes, manualPos) {
-  const idToColRow = {};
-  const colCounts = [];
-  COLUMN_ORDER.forEach((ids, col) => {
-    ids.forEach((id, row) => { idToColRow[id] = { col, row }; });
-    colCounts[col] = ids.length;
-  });
-  const pos = {};
-  nodes.forEach((n) => {
-    const override = manualPos[n.id];
-    if (override && typeof override.x === "number" && typeof override.y === "number") {
-      pos[n.id] = { x: override.x, y: override.y };
-      return;
-    }
-    const cr = idToColRow[n.id];
-    if (cr != null) {
-      const nInCol = colCounts[cr.col] || 1;
-      const blockH = (nInCol - 1) * ROW_H;
-      const cy = GRAPH_HEIGHT / 2;
-      const y = cy - blockH / 2 + cr.row * ROW_H + ROW_H / 2;
-      pos[n.id] = {
-        x: PAD_X + cr.col * COL_W + COL_W / 2,
-        y,
-      };
-      return;
-    }
-    pos[n.id] = { x: PAD_X + COL_W / 2, y: GRAPH_HEIGHT / 2 };
-  });
-  return pos;
+  return normalizeLinkForLoad(l);
 }
 
 function edgePath(sid, tid, pos, nm) {
@@ -285,7 +63,7 @@ const MOVE_STEP = 40;
 export default function AiPowerGraph() {
   const containerRef = useRef(null);
   const [nodes, setNodes] = useState(() => [...DEFAULT_NODES]);
-  const [links, setLinks] = useState(() => LINKS.map((l) => normalizeLink({ ...l })));
+  const [links, setLinks] = useState(() => DEFAULT_LINKS.map((l) => ({ ...l })));
   const [manualPos, setManualPos] = useState({});
   const [selected, setSelected] = useState(null); // { type: 'node', node } | { type: 'link', link } | null
   const [hovered, setHovered] = useState(null);
@@ -295,7 +73,7 @@ export default function AiPowerGraph() {
   const [saveStatus, setSaveStatus] = useState(null);
 
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes]);
-  const positions = useMemo(() => computeColumnPositions(nodes, manualPos), [nodes, manualPos]);
+  const positions = useMemo(() => computePositions(nodes, manualPos), [nodes, manualPos]);
 
   const activeNodeId = selected?.type === "node" ? selected.node?.id : hovered;
   const selectedLink = selected?.type === "link" ? selected.link : null;
@@ -471,9 +249,12 @@ export default function AiPowerGraph() {
           THREAT ANALYSIS // AI-ENABLED POWER CONCENTRATION PATHWAYS
         </div>
         <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "18px", color: "#b0bfcc", fontWeight: 700, letterSpacing: "0.5px" }}>
-          AI Policy → Totalitarian Failure Modes
+          {GRAPH_SPEC.meta?.title ?? "AI Policy → Totalitarian Failure Modes"}
           <span style={{ fontStyle: "italic", fontWeight: 400, fontSize: "14px", color: "#3a5570", marginLeft: "12px" }}>dependency graph</span>
         </h1>
+        {GRAPH_SPEC.meta?.subtitle && (
+          <div style={{ fontSize: "11px", color: "#3a5570", marginTop: "4px", lineHeight: 1.4 }}>{GRAPH_SPEC.meta.subtitle}</div>
+        )}
       </div>
 
       <div className="graph-layout" style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0, minWidth: 0 }}>
