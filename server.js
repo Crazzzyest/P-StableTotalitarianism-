@@ -61,7 +61,7 @@ app.post("/api/register", (req, res) => {
   const u = String(username).trim().toLowerCase();
   if (!u) return res.status(400).json({ error: "Username required" });
   if (store.users[u]) return res.status(400).json({ error: "Username taken" });
-  store.users[u] = { password: String(password), links: [] };
+  store.users[u] = { password: String(password), links: [], manualPos: {} };
   const token = randomUUID();
   store.sessions[token] = u;
   saveStore();
@@ -83,9 +83,10 @@ app.post("/api/login", (req, res) => {
 app.post("/api/save", (req, res) => {
   const username = getUsername(req);
   if (!username) return res.status(401).json({ error: "Not logged in" });
-  const { links } = req.body || {};
+  const { links, manualPos } = req.body || {};
   if (!Array.isArray(links)) return res.status(400).json({ error: "links array required" });
   store.users[username].links = links;
+  store.users[username].manualPos = manualPos && typeof manualPos === "object" ? manualPos : {};
   saveStore();
   res.json({ ok: true });
 });
@@ -93,8 +94,10 @@ app.post("/api/save", (req, res) => {
 app.get("/api/load", (req, res) => {
   const username = getUsername(req);
   if (!username) return res.status(401).json({ error: "Not logged in" });
-  const links = store.users[username]?.links ?? [];
-  res.json({ links });
+  const user = store.users[username];
+  const links = user?.links ?? [];
+  const manualPos = user?.manualPos ?? {};
+  res.json({ links, manualPos });
 });
 
 const PORT = Number(process.env.PORT) || 3001;

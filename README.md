@@ -18,3 +18,8 @@ View your app in AI Studio: https://ai.studio/apps/362daee8-35f3-4d3b-a5d5-92269
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Deploy (Sliplane)
+
+- **Frontend** (this Dockerfile): serves on **port 80**. In Sliplane, set the service port and health check to **80**, not 3001.
+- **Backend** (Dockerfile.api): see [backend/README.md](backend/README.md). Backend uses port 3001.

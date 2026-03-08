@@ -91,11 +91,32 @@ const NODES = [
     description: "AI systems capable of identifying deception with near-certainty — applied to loyalty testing, interrogation, and political vetting.",
     threat: "Eliminates the ability to form covert opposition or pretend loyalty while organizing resistance. The winning coalition can be shrunk to only verified loyalists.",
   },
+  { id: "node_mmhmhcta", label: "Interpretability", category: "ai", description: "", threat: "" },
+  { id: "node_mmhmk80k", label: "AI enabled bad actors", category: "risk", description: "", threat: "" },
+  { id: "military_ai_race", label: "Military AI Race", category: "ai", description: "State competition to develop AI for targeting, autonomous weapons, ISR, and cyber offense.", threat: "Compresses decision timelines, increases first-strike incentives." },
+  { id: "mass_unemployment", label: "Mass Unemployment", category: "risk", description: "Structural displacement as AI automates knowledge economy work.", threat: "Precarity fuels radicalization and demand for strongman solutions." },
+  { id: "info_ecosystem_collapse", label: "Info Ecosystem Collapse", category: "risk", description: "Breakdown of shared epistemic foundations — AI-generated content drowns signal.", threat: "Radicalization accelerates; consent manufacturing becomes trivially cheap." },
+  { id: "political_radicalization", label: "Political Radicalization", category: "social", description: "Polarization past the point where opposing factions share institutional legitimacy.", threat: "Creates pressure for emergency measures." },
+  { id: "consent_manufacturing", label: "Consent Manufacturing", category: "state", description: "AI-enabled personalized persuasion at scale.", threat: "Dissolves the distinction between genuine democratic mandate and manufactured one." },
+  { id: "winning_coalition", label: "Winning Coalition Size ↓", category: "social", description: "The minimum number of people a leader must satisfy to remain in power. AI enables this to shrink dramatically.", threat: "Large coalition forces leaders to provide public goods; small coalition makes private benefits sufficient." },
 ];
 
+function normalizeNode(n) {
+  const label = Array.isArray(n.label) ? n.label : (n.label != null ? String(n.label).split(" ") : []);
+  const cat = n.cat ?? n.category;
+  return { id: n.id, label, category: cat, description: n.desc ?? n.description ?? "", threat: n.threat ?? "" };
+}
+
+const DEFAULT_NODES = NODES.map(normalizeNode);
+
 const LINKS = [
-  { source: "open_source", target: "ai_capability", weight: 0.7, label: "expands" },
-  { source: "open_source", target: "mass_casualty", weight: 0.65, label: "enables" },
+  { source: "open_source", target: "ai_capability", weight: 1, label: "accelerates" },
+  { source: "open_source", target: "mass_casualty", weight: 1, label: "enables" },
+  { source: "open_source", target: "democratic_resilience", weight: 1, label: "distributes power" },
+  { source: "ai_capability", target: "military_ai_race", weight: 1, label: "fuels" },
+  { source: "ai_capability", target: "mass_unemployment", weight: 1, label: "drives" },
+  { source: "ai_capability", target: "info_ecosystem_collapse", weight: 1, label: "enables" },
+  { source: "ai_capability", target: "world_gov", weight: 1, label: "demands governance" },
   { source: "ai_capability", target: "mass_casualty", weight: 0.55, label: "amplifies" },
   { source: "ai_capability", target: "nuclear_risk", weight: 0.45, label: "amplifies" },
   { source: "ai_capability", target: "surveillance", weight: 0.6, label: "supercharges" },
@@ -107,19 +128,48 @@ const LINKS = [
   { source: "emergency_powers", target: "surveillance", weight: 0.8, label: "expands" },
   { source: "surveillance", target: "power_concentration", weight: 0.75, label: "enables" },
   { source: "surveillance", target: "democratic_resilience", weight: -0.65, label: "degrades" },
-  { source: "interpretability", target: "alignment_capture", weight: 0.75, label: "enables" },
-  { source: "alignment_capture", target: "power_concentration", weight: 0.85, label: "delivers" },
-  { source: "ai_pause", target: "world_gov", weight: 0.7, label: "requires" },
-  { source: "world_gov", target: "power_concentration", weight: 0.65, label: "concentrates" },
-  { source: "world_gov", target: "civil_liberties", weight: -0.45, label: "threatens" },
+  { source: "world_gov", target: "power_concentration", weight: 1, label: "concentrates" },
   { source: "civil_liberties", target: "democratic_resilience", weight: 0.7, label: "sustains" },
   { source: "democratic_resilience", target: "power_concentration", weight: -0.8, label: "resists" },
   { source: "power_concentration", target: "totalitarianism", weight: 0.9, label: "becomes" },
-  { source: "ai_capability", target: "aging_cured", weight: 0.7, label: "enables" },
-  { source: "aging_cured", target: "regime_stability", weight: 0.85, label: "stabilizes" },
-  { source: "ai_capability", target: "perfect_lie_detection", weight: 0.65, label: "enables" },
-  { source: "perfect_lie_detection", target: "regime_stability", weight: 0.8, label: "strengthens" },
+  { source: "ai_capability", target: "aging_cured", weight: 1, label: "enables" },
+  { source: "ai_capability", target: "perfect_lie_detection", weight: 1, label: "enables" },
+  { source: "aging_cured", target: "totalitarianism", weight: 1, label: "stabilizes" },
+  { source: "aging_cured", target: "winning_coalition", weight: -1, label: "shrinks" },
+  { source: "perfect_lie_detection", target: "winning_coalition", weight: -1, label: "shrinks" },
+  { source: "node_mmhmhcta", target: "node_mmhmk80k", weight: 1, label: "enables" },
+  { source: "node_mmhmk80k", target: "mass_casualty", weight: 1, label: "enables" },
+  { source: "military_ai_race", target: "nuclear_risk", weight: 1, label: "escalates" },
+  { source: "military_ai_race", target: "emergency_powers", weight: 1, label: "justifies" },
+  { source: "military_ai_race", target: "power_concentration", weight: 1, label: "drives" },
+  { source: "mass_unemployment", target: "political_radicalization", weight: 1, label: "fuels" },
+  { source: "mass_unemployment", target: "public_fear", weight: 1, label: "amplifies" },
+  { source: "mass_unemployment", target: "winning_coalition", weight: -1, label: "shrinks" },
+  { source: "info_ecosystem_collapse", target: "political_radicalization", weight: 1, label: "accelerates" },
+  { source: "info_ecosystem_collapse", target: "democratic_resilience", weight: -1, label: "degrades" },
+  { source: "info_ecosystem_collapse", target: "consent_manufacturing", weight: 1, label: "enables" },
+  { source: "political_radicalization", target: "emergency_powers", weight: 1, label: "justifies" },
+  { source: "political_radicalization", target: "democratic_resilience", weight: -1, label: "degrades" },
+  { source: "consent_manufacturing", target: "power_concentration", weight: 1, label: "enables" },
+  { source: "consent_manufacturing", target: "democratic_resilience", weight: -1, label: "undermines" },
+  { source: "consent_manufacturing", target: "winning_coalition", weight: -1, label: "shrinks" },
+  { source: "world_gov", target: "civil_liberties", weight: -1, label: "threatens" },
+  { source: "world_gov", target: "surveillance", weight: 1, label: "requires" },
+  { source: "civil_liberties", target: "democratic_resilience", weight: 1, label: "sustains" },
+  { source: "democratic_resilience", target: "power_concentration", weight: -1, label: "resists" },
+  { source: "winning_coalition", target: "power_concentration", weight: -1, label: "constrains" },
+  { source: "winning_coalition", target: "totalitarianism", weight: -1, label: "prevents" },
 ];
+
+function normalizeLink(l) {
+  return {
+    source: l.source ?? l.s,
+    target: l.target ?? l.t,
+    weight: typeof l.weight === "number" ? l.weight : (typeof l.w === "number" ? l.w : 1),
+    label: l.label ?? l.lbl ?? "enables",
+    color: l.color,
+  };
+}
 
 const CATEGORY_META = {
   policy:   { color: "#1e6091", label: "AI Policy" },
@@ -131,30 +181,52 @@ const CATEGORY_META = {
   terminal: { color: "#cc1122", label: "Terminal State" },
 };
 
-// Layout from improved graph: 1000 viewBox, ring + center nodes, curved edges
-const VB = 1000;
-const CX = 500;
-const CY = 500;
-const RING_R = 355;
-const CENTER_GAP = 160;
-
-const isCenter = (node) => node.category === "outcome" || node.category === "terminal";
+// Column layout: left to right, order 0..9. Scrollable canvas.
+const COL_W = 240;
+const ROW_H = 100;
+const PAD_X = 80;
+const PAD_Y = 60;
+const NUM_COLUMNS = 10;
+// Column 0 (Root) -> Column 9 (Terminal). Each entry is ordered list of node ids (top to bottom).
+const COLUMN_ORDER = [
+  ["open_source", "node_mmhmhcta", "node_mmhmk80k"],
+  ["ai_capability", "mass_casualty"],
+  ["military_ai_race", "mass_unemployment", "info_ecosystem_collapse", "world_gov", "aging_cured", "perfect_lie_detection"],
+  ["nuclear_risk", "political_radicalization", "consent_manufacturing"],
+  ["public_fear"],
+  ["emergency_powers"],
+  ["surveillance", "civil_liberties"],
+  ["winning_coalition", "democratic_resilience"],
+  ["power_concentration"],
+  ["totalitarianism"],
+];
+const GRAPH_WIDTH = NUM_COLUMNS * COL_W + PAD_X * 2;
+const GRAPH_HEIGHT = 1000;
 
 const BASE_R = { policy: 20, ai: 20, risk: 18, social: 18, state: 18, outcome: 30, terminal: 40 };
-const DOUBLED = new Set(["ai_capability", "mass_casualty", "emergency_powers", "power_concentration"]);
-const getR = (node) => (BASE_R[node.category] ?? 18) * (DOUBLED.has(node.id) ? 2 : 1);
+const getR = (node) => BASE_R[node.category ?? node.cat] ?? 18;
 
-function computePositions(nodes) {
-  const ring = nodes.filter((n) => !isCenter(n));
-  const center = nodes.filter((n) => isCenter(n));
-  const pos = {};
-  ring.forEach((n, i) => {
-    const a = (i / ring.length) * Math.PI * 2 - Math.PI / 2;
-    pos[n.id] = { x: CX + RING_R * Math.cos(a), y: CY + RING_R * Math.sin(a), a };
+function computeColumnPositions(nodes, manualPos) {
+  const idToColRow = {};
+  COLUMN_ORDER.forEach((ids, col) => {
+    ids.forEach((id, row) => { idToColRow[id] = { col, row }; });
   });
-  const totalH = (center.length - 1) * CENTER_GAP;
-  center.forEach((n, i) => {
-    pos[n.id] = { x: CX, y: CY - totalH / 2 + i * CENTER_GAP, a: 0 };
+  const pos = {};
+  nodes.forEach((n) => {
+    const override = manualPos[n.id];
+    if (override && typeof override.x === "number" && typeof override.y === "number") {
+      pos[n.id] = { x: override.x, y: override.y };
+      return;
+    }
+    const cr = idToColRow[n.id];
+    if (cr != null) {
+      pos[n.id] = {
+        x: PAD_X + cr.col * COL_W + COL_W / 2,
+        y: PAD_Y + cr.row * ROW_H + ROW_H / 2,
+      };
+      return;
+    }
+    pos[n.id] = { x: PAD_X + COL_W / 2, y: PAD_Y + ROW_H / 2 };
   });
   return pos;
 }
@@ -163,12 +235,15 @@ function edgePath(sid, tid, pos, nm) {
   const sp = pos[sid];
   const tp = pos[tid];
   if (!sp || !tp) return "";
-  const sr = getR(nm[sid]);
-  const tr = getR(nm[tid]);
+  const sr = nm[sid] ? getR(nm[sid]) : 18;
+  const tr = nm[tid] ? getR(nm[tid]) : 18;
   const mx = (sp.x + tp.x) / 2;
   const my = (sp.y + tp.y) / 2;
-  const cpx = mx + (CX - mx) * 0.3;
-  const cpy = my + (CY - my) * 0.3;
+  const dx = tp.x - sp.x;
+  const dy = tp.y - sp.y;
+  const perp = Math.sqrt(dx * dx + dy * dy) || 1;
+  const cpx = mx + (-dy / perp) * 40;
+  const cpy = my + (dx / perp) * 40;
   const dx1 = cpx - sp.x;
   const dy1 = cpy - sp.y;
   const d1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
@@ -185,44 +260,36 @@ function edgePath(sid, tid, pos, nm) {
 function edgeMid(sid, tid, pos) {
   const sp = pos[sid];
   const tp = pos[tid];
-  if (!sp || !tp) return { x: CX, y: CY };
+  if (!sp || !tp) return { x: 0, y: 0 };
   const mx = (sp.x + tp.x) / 2;
   const my = (sp.y + tp.y) / 2;
-  const cpx = mx + (CX - mx) * 0.3;
-  const cpy = my + (CY - my) * 0.3;
+  const dx = tp.x - sp.x;
+  const dy = tp.y - sp.y;
+  const perp = Math.sqrt(dx * dx + dy * dy) || 1;
+  const cpx = mx + (-dy / perp) * 40;
+  const cpy = my + (dx / perp) * 40;
   return { x: (sp.x + tp.x + cpx * 2) / 4, y: (sp.y + tp.y + cpy * 2) / 4 - 10 };
 }
-
-const NODE_MAP = Object.fromEntries(NODES.map((n) => [n.id, n]));
-const RING_POSITIONS = computePositions(NODES);
 
 const linkKey = (l) => `${l.source}::${l.target}`;
 const linkColor = (link) => link.color ?? (link.weight > 0 ? "#00cc66" : "#cc2233");
 
+const MOVE_STEP = 40;
+
 export default function AiPowerGraph() {
   const containerRef = useRef(null);
-  const [links, setLinks] = useState(() => LINKS.map((l) => ({ ...l })));
+  const [nodes, setNodes] = useState(() => [...DEFAULT_NODES]);
+  const [links, setLinks] = useState(() => LINKS.map((l) => normalizeLink({ ...l })));
+  const [manualPos, setManualPos] = useState({});
   const [selected, setSelected] = useState(null); // { type: 'node', node } | { type: 'link', link } | null
   const [hovered, setHovered] = useState(null);
-  const [addingLinkSource, setAddingLinkSource] = useState(null); // null | nodeId when waiting for target
-  const [containerSize, setContainerSize] = useState({ w: VB, h: VB });
+  const [addingLinkSource, setAddingLinkSource] = useState(null); // null | "" | nodeId. Node click is handled only via mousedown (no dragRef/mouseup) so add-edge target click always fires handleNodeClick.
   const [authToken, setAuthToken] = useState(() => typeof localStorage !== "undefined" ? localStorage.getItem("graph_auth_token") : null);
   const [username, setUsername] = useState(() => typeof localStorage !== "undefined" ? localStorage.getItem("graph_username") : null);
   const [saveStatus, setSaveStatus] = useState(null);
-  const positions = RING_POSITIONS;
 
-  useEffect(() => {
-    const update = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setContainerSize({ w: rect.width || VB, h: Math.max(rect.height, 400) });
-      }
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+  const nodeMap = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes]);
+  const positions = useMemo(() => computeColumnPositions(nodes, manualPos), [nodes, manualPos]);
 
   const activeNodeId = selected?.type === "node" ? selected.node?.id : hovered;
   const selectedLink = selected?.type === "link" ? selected.link : null;
@@ -263,6 +330,12 @@ export default function AiPowerGraph() {
   const deleteLink = (source, target) => {
     setLinks((prev) => prev.filter((l) => !(l.source === source && l.target === target)));
     setSelected(null);
+  };
+
+  const moveNode = (nodeId, dx, dy) => {
+    const pos = positions[nodeId];
+    if (!pos) return;
+    setManualPos((prev) => ({ ...prev, [nodeId]: { x: pos.x + dx, y: pos.y + dy } }));
   };
 
   const rawApi = typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL ? String(import.meta.env.VITE_API_URL).trim().replace(/\/$/, "") : "";
@@ -339,7 +412,7 @@ export default function AiPowerGraph() {
       const res = await fetch(`${apiBase}/api/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ links }),
+        body: JSON.stringify({ links, manualPos }),
       });
       const data = await parseJson(res).catch((e) => { throw e; });
       if (data?.error) { setSaveStatus(data.error); return; }
@@ -357,9 +430,12 @@ export default function AiPowerGraph() {
       if (data?.error) { setSaveStatus(data.error); return; }
       if (!res.ok) throw new Error(data?.error || res.statusText);
       if (data.links && Array.isArray(data.links)) {
-        setLinks(data.links);
-        setSaveStatus("Loaded.");
+        setLinks(data.links.map((l) => normalizeLink(l)));
       }
+      if (data.manualPos && typeof data.manualPos === "object") {
+        setManualPos(data.manualPos);
+      }
+      if (data.links || data.manualPos) setSaveStatus("Loaded.");
     } catch (e) {
       setSaveStatus("Error: " + (e.message || "Load failed"));
     }
@@ -392,14 +468,13 @@ export default function AiPowerGraph() {
       </div>
 
       <div className="graph-layout" style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
-        {/* Graph canvas - scales to fit */}
-        <div ref={containerRef} className="graph-canvas" style={{ flex: 1, position: "relative", overflow: "hidden", minHeight: 280 }}>
+        {/* Graph canvas - scrollable to see all columns */}
+        <div ref={containerRef} className="graph-canvas" style={{ flex: 1, position: "relative", overflow: "auto", minHeight: 280 }}>
           <svg
-            width="100%"
-            height="100%"
-            viewBox={`0 0 ${VB} ${VB}`}
-            preserveAspectRatio="xMidYMid meet"
-            style={{ display: "block" }}
+            width={GRAPH_WIDTH}
+            height={GRAPH_HEIGHT}
+            viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+            style={{ display: "block", minWidth: "100%" }}
           >
             <defs>
               {["pos", "neg", "pos-dim", "neg-dim"].map(k => {
@@ -423,10 +498,9 @@ export default function AiPowerGraph() {
                 <stop offset="100%" stopColor="#06090c" />
               </radialGradient>
             </defs>
-            <rect width={VB} height={VB} fill="url(#bg-grad)" />
-            <circle cx={CX} cy={CY} r={RING_R} fill="none" stroke="#0d1820" strokeWidth="1" strokeDasharray="2,8" />
+            <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#bg-grad)" />
 
-            {/* Links – curved paths toward center */}
+            {/* Links – curved paths */}
             {links.map((link) => {
               const key = linkKey(link);
               const isActive = highlighted?.linkKeys.has(key);
@@ -436,7 +510,7 @@ export default function AiPowerGraph() {
               const op = isDim ? 0.28 : 1;
               const mId = isDim ? (pos ? "arr-pos-dim" : "arr-neg-dim") : (pos ? "arr-pos" : "arr-neg");
               const sw = isActive ? 1.8 : 0.9;
-              const d = edgePath(link.source, link.target, positions, NODE_MAP);
+              const d = edgePath(link.source, link.target, positions, nodeMap);
               const mid = isActive ? edgeMid(link.source, link.target, positions) : null;
 
               return (
@@ -466,22 +540,23 @@ export default function AiPowerGraph() {
               );
             })}
 
-            {/* Nodes – ring + center, radius from getR */}
-            {NODES.map((node) => {
+            {/* Nodes – column layout */}
+            {nodes.map((node) => {
               const pos = positions[node.id];
               if (!pos) return null;
+              const cat = node.category ?? node.cat;
               const isSel = selected?.type === "node" && selected.node?.id === node.id;
               const isHov = hovered === node.id;
               const isDim = highlighted && !highlighted.nodeIds.has(node.id);
-              const meta = CATEGORY_META[node.category];
+              const meta = CATEGORY_META[cat] ?? CATEGORY_META.ai;
               const r = getR(node);
-              const words = node.label.split(" ");
+              const words = Array.isArray(node.label) ? node.label : (node.label != null ? String(node.label).split(" ") : []);
 
               const isAddSrc = addingLinkSource === node.id;
               return (
                 <NodeGroup key={node.id} id={node.id} x={pos.x} y={pos.y} r={r}
                   color={meta.color} isSel={isSel} isHov={isHov} isDim={isDim}
-                  words={words} category={node.category} isAddSource={isAddSrc}
+                  words={words} category={cat} isAddSource={isAddSrc}
                   onSelect={() => handleNodeClick(node)}
                   onHover={() => setHovered(node.id)} onHoverEnd={() => setHovered(null)}
                 />
@@ -499,9 +574,9 @@ export default function AiPowerGraph() {
           <Legend />
           <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
             {selected?.type === "link"
-              ? <EdgeEdit key={linkKey(selected.link)} link={selected.link} nodeMap={NODE_MAP} onUpdate={updateLink} onDelete={deleteLink} onClose={() => setSelected(null)} />
+              ? <EdgeEdit key={linkKey(selected.link)} link={selected.link} nodeMap={nodeMap} onUpdate={updateLink} onDelete={deleteLink} onClose={() => setSelected(null)} />
               : selected?.type === "node"
-                ? <NodeInfo node={selected.node} links={links} />
+                ? <NodeInfo node={selected.node} links={links} nodeMap={nodeMap} onMove={moveNode} moveStep={MOVE_STEP} />
                 : <EmptyState
                     onAddConnection={() => setAddingLinkSource(addingLinkSource === null ? "" : null)}
                     addingLinkSource={addingLinkSource}
@@ -590,38 +665,58 @@ function Legend() {
   );
 }
 
-function NodeInfo({ node, links }) {
-  const meta = CATEGORY_META[node.category];
+function nodeLabel(node) {
+  const l = node?.label;
+  return Array.isArray(l) ? l.join(" ") : (l != null ? String(l) : node?.id ?? "");
+}
+
+function NodeInfo({ node, links, nodeMap, onMove, moveStep }) {
+  const cat = node.category ?? node.cat;
+  const meta = CATEGORY_META[cat] ?? CATEGORY_META.ai;
   const incoming = links.filter((l) => l.target === node.id);
   const outgoing = links.filter((l) => l.source === node.id);
+  const step = moveStep ?? 40;
 
   return (
     <div>
       <div style={{ fontSize: "8px", letterSpacing: "3px", color: "#2a4060", marginBottom: "6px" }}>
-        {meta.label.toUpperCase()}
+        {(meta?.label ?? "NODE").toUpperCase()}
       </div>
       <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "17px", color: meta.color, filter: "brightness(1.6)", marginBottom: "12px", lineHeight: "1.3" }}>
-        {node.label}
+        {nodeLabel(node)}
       </div>
+      {onMove && (
+        <div style={{ marginBottom: "14px" }}>
+          <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#2a4060", marginBottom: "6px" }}>MOVE NODE</div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            <button type="button" onClick={() => onMove(node.id, -step, 0)} style={{ padding: "4px 8px", fontSize: "10px", background: "#0d1822", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>← Left</button>
+            <button type="button" onClick={() => onMove(node.id, step, 0)} style={{ padding: "4px 8px", fontSize: "10px", background: "#0d1822", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>Right →</button>
+            <button type="button" onClick={() => onMove(node.id, 0, -step)} style={{ padding: "4px 8px", fontSize: "10px", background: "#0d1822", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>↑ Up</button>
+            <button type="button" onClick={() => onMove(node.id, 0, step)} style={{ padding: "4px 8px", fontSize: "10px", background: "#0d1822", border: "1px solid #1a2a3a", color: "#5a7080", borderRadius: "2px", cursor: "pointer" }}>↓ Down</button>
+          </div>
+        </div>
+      )}
       <div style={{ fontSize: "11px", color: "#5a7080", lineHeight: "1.75", marginBottom: "14px" }}>
-        {node.description}
+        {node.description ?? node.desc ?? ""}
       </div>
-      <div style={{ background: "#08101a", border: `1px solid #0d1822`, borderLeft: `2px solid ${meta.color}`, padding: "10px 12px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#3a2a10", marginBottom: "5px" }}>THREAT VECTOR</div>
-        <div style={{ fontSize: "10px", color: "#6a5030", lineHeight: "1.7" }}>{node.threat}</div>
-      </div>
+      {(node.threat ?? "").length > 0 && (
+        <div style={{ background: "#08101a", border: `1px solid #0d1822`, borderLeft: `2px solid ${meta.color}`, padding: "10px 12px", marginBottom: "16px" }}>
+          <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#3a2a10", marginBottom: "5px" }}>THREAT VECTOR</div>
+          <div style={{ fontSize: "10px", color: "#6a5030", lineHeight: "1.7" }}>{node.threat}</div>
+        </div>
+      )}
 
       {incoming.length > 0 && (
         <div style={{ marginBottom: "14px" }}>
           <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#2a4060", marginBottom: "7px" }}>INFLUENCED BY</div>
           {incoming.map(l => {
-            const src = NODES.find(n => n.id === l.source);
+            const src = nodeMap?.[l.source];
             return (
               <div key={l.source} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
                 <span style={{ color: l.weight > 0 ? "#00cc66" : "#cc2233", fontSize: "10px", flexShrink: 0 }}>
                   {l.weight > 0 ? "▲" : "▼"}
                 </span>
-                <span style={{ fontSize: "10px", color: "#3a5060", flex: 1 }}>{src?.label}</span>
+                <span style={{ fontSize: "10px", color: "#3a5060", flex: 1 }}>{nodeLabel(src)}</span>
                 <span style={{ fontSize: "9px", color: "#1e3040", letterSpacing: "1px" }}>{l.label}</span>
               </div>
             );
@@ -633,13 +728,13 @@ function NodeInfo({ node, links }) {
         <div>
           <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#2a4060", marginBottom: "7px" }}>INFLUENCES</div>
           {outgoing.map(l => {
-            const tgt = NODES.find(n => n.id === l.target);
+            const tgt = nodeMap?.[l.target];
             return (
               <div key={l.target} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
                 <span style={{ color: l.weight > 0 ? "#00cc66" : "#cc2233", fontSize: "10px", flexShrink: 0 }}>
                   {l.weight > 0 ? "▲" : "▼"}
                 </span>
-                <span style={{ fontSize: "10px", color: "#3a5060", flex: 1 }}>{tgt?.label}</span>
+                <span style={{ fontSize: "10px", color: "#3a5060", flex: 1 }}>{nodeLabel(tgt)}</span>
                 <span style={{ fontSize: "9px", color: "#1e3040", letterSpacing: "1px" }}>{l.label}</span>
               </div>
             );
@@ -654,8 +749,10 @@ function EdgeEdit({ link, nodeMap, onUpdate, onDelete, onClose }) {
   const [label, setLabel] = useState(link.label);
   const [color, setColor] = useState(link.color ?? "");
   const [weightPos, setWeightPos] = useState(link.weight > 0);
-  const src = nodeMap[link.source];
-  const tgt = nodeMap[link.target];
+  const src = nodeMap?.[link.source];
+  const tgt = nodeMap?.[link.target];
+  const srcLabel = Array.isArray(src?.label) ? src.label.join(" ") : (src?.label ?? link.source);
+  const tgtLabel = Array.isArray(tgt?.label) ? tgt.label.join(" ") : (tgt?.label ?? link.target);
   const save = () => {
     onUpdate(link.source, link.target, { label, color: color || undefined, weight: weightPos ? 1 : -1 });
   };
@@ -663,7 +760,7 @@ function EdgeEdit({ link, nodeMap, onUpdate, onDelete, onClose }) {
     <div>
       <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#2a4060", marginBottom: "6px" }}>EDIT CONNECTION</div>
       <div style={{ fontSize: "10px", color: "#5a7080", marginBottom: "10px" }}>
-        {src?.label} → {tgt?.label}
+        {srcLabel} → {tgtLabel}
       </div>
       <label style={{ display: "block", fontSize: "9px", color: "#3a5060", marginBottom: "4px" }}>Label</label>
       <input value={label} onChange={(e) => setLabel(e.target.value)} style={{ width: "100%", background: "#0a1420", border: "1px solid #1a2a3a", color: "#8a9aa8", fontSize: "11px", padding: "6px 8px", marginBottom: "10px", borderRadius: "2px" }} />
